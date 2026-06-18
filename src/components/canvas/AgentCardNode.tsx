@@ -5,6 +5,7 @@ import { AgentCard } from './AgentCard'
 import { useApprovals } from '@/hooks/useApprovals'
 import { useAgentActions } from '@/hooks/useAgentActions'
 import { AGENT_REGISTRY } from '@/lib/agents/registry'
+import { getEventBus } from '@/lib/event-bus'
 import type { CanvasNode } from '@/lib/interfaces'
 
 export interface AgentNodeData {
@@ -24,8 +25,25 @@ export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
   const provider = AGENT_REGISTRY.get(data.agentType)
   const rawActions = useAgentActions(data.agentId)
 
-  const handleApprove = (requestId: string) => provider?.approve(requestId)
-  const handleDeny = (requestId: string) => provider?.deny(requestId)
+  const handleApprove = (requestId: string) => {
+    provider?.approve(requestId)
+    getEventBus().emit({
+      type: 'agent:approval-resolved',
+      requestId,
+      approved: true,
+      timestamp: Date.now(),
+    })
+  }
+
+  const handleDeny = (requestId: string) => {
+    provider?.deny(requestId)
+    getEventBus().emit({
+      type: 'agent:approval-resolved',
+      requestId,
+      approved: false,
+      timestamp: Date.now(),
+    })
+  }
 
   const actions = rawActions.map((entry, i) => ({
     id: `${entry.timestamp}-${i}`,
