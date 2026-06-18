@@ -7,12 +7,15 @@ export interface CodexConfig {
   projectDirectory: string
 }
 
+const TIMEOUT_MS = 30_000
+
 export class CodexAgentProvider implements AgentProvider<CodexConfig, AgentEvent> {
   readonly type = 'codex'
   readonly displayName = 'OpenAI Codex'
   readonly icon = '⚡'
 
   private processes = new Map<string, string>()
+  private approvalSessions = new Map<string, string>() // requestId → sessionId
 
   async configure(_config: CodexConfig): Promise<void> {}
 
@@ -35,8 +38,11 @@ export class CodexAgentProvider implements AgentProvider<CodexConfig, AgentEvent
     const unlisten = await listen<string>(`process://stdout/${processId}`, (event) => {
       try {
         const line = JSON.parse(event.payload)
+        if (line.type === 'approval-request' && line.requestId) {
+          this.approvalSessions.set(line.requestId, session.id)
+        }
         eventQueue.push({
-          type: line.type === 'message' ? 'text-delta' : 'tool-call',
+          type: line.type === 'message' ? 'text-delta' : line.type === 'approval-request' ? 'approval-request' : 'tool-call',
           agentId: session.agentId,
           timestamp: Date.now(),
           payload: line,
@@ -45,10 +51,18 @@ export class CodexAgentProvider implements AgentProvider<CodexConfig, AgentEvent
       } catch { /* skip non-JSON */ }
     })
 
+    let lastActivity = Date.now()
     try {
       while (!done || eventQueue.length > 0) {
-        if (eventQueue.length > 0) yield eventQueue.shift()!
-        else await new Promise((r) => setTimeout(r, 50))
+        if (eventQueue.length > 0) {
+          lastActivity = Date.now()
+          yield eventQueue.shift()!
+        } else if (Date.now() - lastActivity > TIMEOUT_MS) {
+          yield { type: 'error', agentId: session.agentId, timestamp: Date.now(), payload: { error: 'Process timed out' } } as AgentEvent
+          break
+        } else {
+          await new Promise((r) => setTimeout(r, 50))
+        }
       }
       yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'idle' } }
     } finally {
@@ -66,13 +80,21 @@ export class CodexAgentProvider implements AgentProvider<CodexConfig, AgentEvent
   }
 
   async approve(requestId: string): Promise<void> {
-    const processId = this.processes.get(requestId)
-    if (processId) await invoke('send_stdin', { processId, data: 'yes\n' })
+    const sessionId = this.approvalSessions.get(requestId)
+    const processId = sessionId ? this.processes.get(sessionId) : undefined
+    if (processId) {
+      this.approvalSessions.delete(requestId)
+      await invoke('send_stdin', { processId, data: 'yes\n' })
+    }
   }
 
   async deny(requestId: string, _reason?: string): Promise<void> {
-    const processId = this.processes.get(requestId)
-    if (processId) await invoke('send_stdin', { processId, data: 'no\n' })
+    const sessionId = this.approvalSessions.get(requestId)
+    const processId = sessionId ? this.processes.get(sessionId) : undefined
+    if (processId) {
+      this.approvalSessions.delete(requestId)
+      await invoke('send_stdin', { processId, data: 'no\n' })
+    }
   }
 
   getCapabilities(): AgentCapabilities {

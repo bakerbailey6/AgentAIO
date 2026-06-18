@@ -2,6 +2,7 @@
 import { streamText } from 'ai'
 import type { AgentProvider, AgentEvent, AgentSession, AgentCapabilities } from '@/lib/interfaces'
 import { LLMRouter } from '@/lib/llm/router'
+import { initDb, AgentRepository } from '@/lib/storage'
 
 export interface LLMAgentConfig {
   modelId: string
@@ -25,7 +26,11 @@ export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEven
   async configure(_config: LLMAgentConfig): Promise<void> {}
 
   async *run(session: AgentSession, input: string): AsyncIterable<AgentEvent> {
-    const model = await getRouter().getAdapter(session.agentId)
+    const db = await initDb()
+    const agentRepo = new AgentRepository(db)
+    const agentRow = await agentRepo.findById(session.agentId)
+    if (!agentRow?.modelId) throw new Error(`Agent ${session.agentId} has no modelId configured`)
+    const model = await getRouter().getAdapter(agentRow.modelId)
 
     yield {
       type: 'status-change',

@@ -8,12 +8,15 @@ export interface ClaudeCodeConfig {
   allowedPaths: string[]
 }
 
+const TIMEOUT_MS = 30_000
+
 export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, AgentEvent> {
   readonly type = 'claude-code'
   readonly displayName = 'Claude Code'
   readonly icon = '🧑‍💻'
 
   private processes = new Map<string, string>() // sessionId → processId
+  private approvalSessions = new Map<string, string>() // requestId → sessionId
 
   async configure(_config: ClaudeCodeConfig): Promise<void> {}
 
@@ -37,8 +40,11 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
     const unlisten = await listen<string>(`process://stdout/${processId}`, (event) => {
       try {
         const line = JSON.parse(event.payload)
+        if (line.type === 'approval-request' && line.requestId) {
+          this.approvalSessions.set(line.requestId, session.id)
+        }
         eventQueue.push({
-          type: line.type === 'assistant' ? 'text-delta' : 'tool-call',
+          type: line.type === 'assistant' ? 'text-delta' : line.type === 'approval-request' ? 'approval-request' : 'tool-call',
           agentId: session.agentId,
           timestamp: Date.now(),
           payload: line,
@@ -49,10 +55,15 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
       }
     })
 
+    let lastActivity = Date.now()
     try {
       while (!done || eventQueue.length > 0) {
         if (eventQueue.length > 0) {
+          lastActivity = Date.now()
           yield eventQueue.shift()!
+        } else if (Date.now() - lastActivity > TIMEOUT_MS) {
+          yield { type: 'error', agentId: session.agentId, timestamp: Date.now(), payload: { error: 'Process timed out' } } as AgentEvent
+          break
         } else {
           await new Promise((r) => setTimeout(r, 50))
         }
@@ -73,13 +84,21 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
   }
 
   async approve(requestId: string): Promise<void> {
-    const processId = this.processes.get(requestId)
-    if (processId) await invoke('send_stdin', { processId, data: 'y\n' })
+    const sessionId = this.approvalSessions.get(requestId)
+    const processId = sessionId ? this.processes.get(sessionId) : undefined
+    if (processId) {
+      this.approvalSessions.delete(requestId)
+      await invoke('send_stdin', { processId, data: 'y\n' })
+    }
   }
 
   async deny(requestId: string, _reason?: string): Promise<void> {
-    const processId = this.processes.get(requestId)
-    if (processId) await invoke('send_stdin', { processId, data: 'n\n' })
+    const sessionId = this.approvalSessions.get(requestId)
+    const processId = sessionId ? this.processes.get(sessionId) : undefined
+    if (processId) {
+      this.approvalSessions.delete(requestId)
+      await invoke('send_stdin', { processId, data: 'n\n' })
+    }
   }
 
   getCapabilities(): AgentCapabilities {
