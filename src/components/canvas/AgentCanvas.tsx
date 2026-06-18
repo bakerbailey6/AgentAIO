@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
@@ -57,7 +58,7 @@ export function AgentCanvas() {
   if (!loaded) return null
 
   return (
-    <div className="w-full h-full bg-[#080910]">
+    <div className="w-full h-full bg-[#09090b]">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -71,12 +72,12 @@ export function AgentCanvas() {
         onMoveEnd={handleMoveEnd}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#1e1f2e" gap={24} size={0.8} />
-        <Controls className="[&>button]:bg-[#1e2030] [&>button]:border-[#333] [&>button]:text-neutral-400" />
+        <Background variant={BackgroundVariant.Dots} color="#27272a" gap={24} size={1} />
+        <Controls className="[&>button]:bg-white/[0.06] [&>button]:border-white/[0.08] [&>button]:text-zinc-400 [&>button:hover]:bg-white/[0.10]" />
         <MiniMap
-          className="bg-[#0a0b14] border border-[#1e2030] rounded-lg"
-          nodeColor={(n) => n.type === 'agentCard' ? '#7c6af7' : '#333'}
-          maskColor="rgba(8,9,16,0.7)"
+          style={{ background: '#09090b' }}
+          nodeColor="#3f3f46"
+          maskColor="rgba(9,9,11,0.8)"
         />
       </ReactFlow>
     </div>

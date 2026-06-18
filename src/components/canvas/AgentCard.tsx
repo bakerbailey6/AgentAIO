@@ -6,11 +6,11 @@ import { useAgentStatus } from '@/hooks/useAgentStatus'
 import type { ApprovalRequest } from '@/lib/interfaces'
 
 const STATUS_STYLES = {
-  'idle': { border: 'border-neutral-700', header: 'bg-[#141420]', dot: 'bg-neutral-500', label: 'IDLE', labelColor: 'text-neutral-500' },
-  'running': { border: 'border-green-500', header: 'bg-[#0e1a12]', dot: 'bg-green-400', label: 'RUNNING', labelColor: 'text-green-400' },
-  'awaiting-approval': { border: 'border-red-500', header: 'bg-[#1a0c0e]', dot: 'bg-red-400', label: 'APPROVAL NEEDED', labelColor: 'text-red-400' },
-  'error': { border: 'border-red-700', header: 'bg-[#1a0808]', dot: 'bg-red-600', label: 'ERROR', labelColor: 'text-red-600' },
-  'stopped': { border: 'border-neutral-700', header: 'bg-[#141420]', dot: 'bg-neutral-600', label: 'STOPPED', labelColor: 'text-neutral-600' },
+  'idle': { border: 'border-white/[0.08]', header: '', dot: 'bg-zinc-600', dotExtra: '', label: 'IDLE', labelColor: 'text-zinc-600' },
+  'running': { border: 'border-emerald-500/30', header: '', dot: 'bg-emerald-400', dotExtra: 'shadow-[0_0_8px_rgba(52,211,153,0.6)]', label: 'RUNNING', labelColor: 'text-emerald-400' },
+  'awaiting-approval': { border: 'border-amber-500/30', header: '', dot: 'bg-amber-400', dotExtra: 'animate-pulse', label: 'APPROVAL NEEDED', labelColor: 'text-amber-400' },
+  'error': { border: 'border-red-500/30', header: '', dot: 'bg-red-400', dotExtra: '', label: 'ERROR', labelColor: 'text-red-400' },
+  'stopped': { border: 'border-white/[0.08]', header: '', dot: 'bg-zinc-600', dotExtra: '', label: 'STOPPED', labelColor: 'text-zinc-600' },
 }
 
 interface AgentCardProps {
@@ -32,26 +32,29 @@ export function AgentCard({ agentId, name, icon, modelName, toolCount, actions, 
 
   return (
     <div
-      className={cn('w-[200px] rounded-[10px] bg-[#12131e] border overflow-hidden cursor-default select-none', style.border)}
+      className={cn('w-64 rounded-2xl bg-white/[0.04] backdrop-blur border overflow-hidden cursor-default select-none shadow-xl shadow-black/30', style.border)}
       onDoubleClick={onOpen}
     >
       {/* Drag handle dots */}
-      <div className="flex justify-center gap-1 pt-1.5 pb-0">
-        {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full bg-neutral-700" />)}
+      <div className="flex justify-center gap-1 pt-2 pb-0">
+        {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full bg-white/[0.12]" />)}
       </div>
-      {/* Status header */}
-      <div className={cn('flex items-center gap-2 px-3 py-1.5', style.header)}>
-        <span className={cn('w-2 h-2 rounded-full shrink-0', style.dot)} />
-        <span className={cn('text-[9px] font-bold tracking-wide flex-1', style.labelColor)}>{style.label}</span>
-      </div>
-      {/* Name + model */}
-      <div className="px-3 pt-2 pb-1">
-        <p className="text-[14px] font-bold">{icon} <span>{name}</span></p>
-        <p className="text-[10px] text-neutral-600">{modelName} · {toolCount} tools</p>
+      {/* Header: name + status */}
+      <div className="px-4 pt-2 pb-1 flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-semibold text-zinc-100 leading-snug">{icon} <span>{name}</span></p>
+          <p className="text-[10px] text-zinc-500 mt-0.5">{modelName} · {toolCount} tools</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', style.dot, style.dotExtra)} />
+          <span className={cn('text-[9px] font-semibold tracking-wide uppercase', style.labelColor)}>{style.label}</span>
+        </div>
       </div>
       {/* Action feed */}
-      <div className="px-2 pb-2">
-        <ActionFeed actions={actions} />
+      <div className="px-3 pb-3">
+        <div className="bg-black/20 rounded-xl p-2 mt-2">
+          <ActionFeed actions={actions} />
+        </div>
       </div>
       {/* Approval gates */}
       {pendingApprovals.map(req => (
