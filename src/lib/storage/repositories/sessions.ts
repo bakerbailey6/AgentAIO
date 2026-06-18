@@ -53,6 +53,21 @@ export class SessionRepository {
     await this.db.execute('DELETE FROM sessions WHERE id = $1', [id])
   }
 
+  async findByAgentId(agentId: string): Promise<SessionRow[]> {
+    const rows = await this.db.select<Record<string, unknown>[]>(
+      'SELECT * FROM sessions WHERE agent_id = $1 ORDER BY created_at DESC',
+      [agentId],
+    )
+    return rows.map(this.deserialize.bind(this))
+  }
+
+  async updateMessages(id: string, messages: unknown[]): Promise<void> {
+    await this.db.execute(
+      'UPDATE sessions SET messages = $1 WHERE id = $2',
+      [JSON.stringify(messages), id],
+    )
+  }
+
   private deserialize(row: Record<string, unknown>): SessionRow {
     return {
       id: row.id as string,

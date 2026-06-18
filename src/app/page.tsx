@@ -8,6 +8,7 @@ import { AgentCanvas } from '@/components/canvas/AgentCanvas'
 import { StorePanel } from '@/components/store/StorePanel'
 import SettingsPanel from '@/components/settings/SettingsPanel'
 import CreateAgentPanel from '@/components/agents/CreateAgentPanel'
+import ChatPanel from '@/components/chat/ChatPanel'
 import { useApprovals } from '@/hooks/useApprovals'
 import { initDb, AgentRepository } from '@/lib/storage'
 import type { AgentRow } from '@/lib/storage'
@@ -50,7 +51,7 @@ export default function Home() {
               // do NOT setShowCreateAgent(false) here — onClose handles that
             }}
           />
-          {/* ChatPanel rendered in Task C */}
+          <ChatPanel agentId={chatAgentId} onClose={() => setChatAgentId(null)} />
         </div>
         <StatusBar
           runningCount={0} idleCount={0} approvalCount={approvals.length}
