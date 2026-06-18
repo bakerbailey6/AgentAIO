@@ -1,6 +1,6 @@
 // src/components/canvas/AgentCanvas.tsx
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Background,
   Controls,
@@ -8,7 +8,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   type Node,
-  type Edge,
   type Viewport,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
@@ -25,21 +24,23 @@ const EDGE_OPTIONS = {
   animated: true,
 }
 
-const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
-
 export function AgentCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeData | GroupNodeData>([])
-  const [edges, , onEdgesChange] = useEdgesState<Edge>([])
-  const [defaultViewport, setDefaultViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
+  const [edges, , onEdgesChange] = useEdgesState([])
+  const [loaded, setLoaded] = useState(false)
+  const [savedViewport, setSavedViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 })
+
+  const nodeTypes = useMemo(() => getNodeTypes(), [])
 
   useEffect(() => {
     loadCanvasState()
       .then((state) => {
         if (state) {
-          setDefaultViewport(state.viewport)
+          setSavedViewport(state.viewport)
         }
       })
       .catch((e: unknown) => console.error('Failed to load canvas state', e))
+      .finally(() => setLoaded(true))
   }, [])
 
   const handleNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
@@ -53,6 +54,8 @@ export function AgentCanvas() {
     saveCanvasState(viewport, groupNodes)
   }, [nodes])
 
+  if (!loaded) return null
+
   return (
     <div className="w-full h-full bg-[#080910]">
       <ReactFlow
@@ -60,10 +63,10 @@ export function AgentCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        nodeTypes={getNodeTypes()}
+        nodeTypes={nodeTypes}
         edgeTypes={EDGE_TYPES}
         defaultEdgeOptions={EDGE_OPTIONS}
-        defaultViewport={defaultViewport}
+        defaultViewport={savedViewport}
         onNodeDragStop={handleNodeDragStop}
         onMoveEnd={handleMoveEnd}
         proOptions={{ hideAttribution: true }}
