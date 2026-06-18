@@ -1,4 +1,4 @@
-import type { LanguageModelV1 } from 'ai'
+import type { LanguageModel } from 'ai'
 
 export interface BaseModel {
   id: string
@@ -23,6 +23,6 @@ export interface LLMProvider<TModel extends BaseModel = BaseModel> {
   readonly providerId: string
   readonly displayName: string
   listModels(credentials: Credentials): Promise<TModel[]>
-  createAdapter(model: TModel, credentials: Credentials): LanguageModelV1
+  createAdapter(model: TModel, credentials: Credentials): LanguageModel
   testConnection(credentials: Credentials): Promise<ConnectionResult>
 }
