@@ -1,7 +1,10 @@
-// src/components/store/StorePanel.tsx
 'use client'
 import { useState } from 'react'
 import { StoreItemRow } from './StoreItemRow'
+import { useInstalledMcps } from '@/hooks/useInstalledMcps'
+import { MCP_CATALOG } from '@/lib/store/catalog'
+import type { CatalogMcpEntry } from '@/lib/store/catalog'
+import { initDb, McpRepository } from '@/lib/storage'
 
 type Tab = 'mcps' | 'tools' | 'skills'
 
@@ -17,6 +20,34 @@ interface StorePanelProps {
 
 export function StorePanel({ onClose }: StorePanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('mcps')
+  const [installingName, setInstallingName] = useState<string | null>(null)
+  const [footerInput, setFooterInput] = useState('')
+  const { mcps, install, uninstall, isInstalled } = useInstalledMcps()
+
+  async function handleInstall(entry: CatalogMcpEntry) {
+    setInstallingName(entry.name)
+    try {
+      await install(entry)
+    } finally {
+      setInstallingName(null)
+    }
+  }
+
+  async function handleFooterAdd() {
+    const cmd = footerInput.trim()
+    if (!cmd) return
+    const name = cmd.split(' ').pop() ?? cmd
+    const db = await initDb()
+    const repo = new McpRepository(db)
+    await repo.create({
+      name,
+      transport: 'stdio',
+      commandOrUrl: cmd,
+      envVarsRef: [],
+      enabled: true,
+    })
+    setFooterInput('')
+  }
 
   return (
     <div className="absolute inset-y-0 right-0 w-80 bg-[#0d0d0f] border-l border-white/[0.08] flex flex-col z-10 shadow-2xl shadow-black/40">
@@ -52,15 +83,21 @@ export function StorePanel({ onClose }: StorePanelProps) {
       {/* Items list */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'mcps' && (
-          <StoreItemRow
-            name="@modelcontextprotocol/server-filesystem"
-            description="Read and write files on the local filesystem"
-            version="0.6.2"
-            installed={false}
-            assignedAgents={[]}
-            onInstall={() => {}}
-            onUninstall={() => {}}
-          />
+          MCP_CATALOG.map(entry => (
+            <StoreItemRow
+              key={entry.name}
+              name={entry.name}
+              version={entry.version}
+              description={entry.description}
+              installed={isInstalled(entry.name)}
+              installing={installingName === entry.name}
+              onInstall={() => handleInstall(entry)}
+              onUninstall={() => {
+                const row = mcps.find(m => m.name === entry.name)
+                if (row) uninstall(row.id)
+              }}
+            />
+          ))
         )}
         {activeTab === 'tools' && (
           <div className="px-4 py-8 text-center text-zinc-600 text-[12px] leading-relaxed">
@@ -78,10 +115,15 @@ export function StorePanel({ onClose }: StorePanelProps) {
         <p className="text-[11px] text-zinc-500 mb-2">Install from path or URL</p>
         <div className="flex gap-2">
           <input
+            value={footerInput}
+            onChange={e => setFooterInput(e.target.value)}
             placeholder="npx @mcp/server or https://..."
             className="flex-1 bg-white/[0.05] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[11px] text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
           />
-          <button className="px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-[11px] font-semibold text-white transition-colors">
+          <button
+            onClick={handleFooterAdd}
+            className="px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-[11px] font-semibold text-white transition-colors"
+          >
             Add
           </button>
         </div>
