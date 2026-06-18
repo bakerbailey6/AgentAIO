@@ -7,6 +7,7 @@ import { getEventBus } from '@/lib/event-bus'
 import type { AgentSession, AgentStatus } from '@/lib/interfaces'
 import type { ChatMessage } from '@/lib/chat/types'
 import type { AgentEvent } from '@/lib/interfaces'
+import type { Db } from '@/lib/storage'
 import ChatMessageComponent from './ChatMessage'
 
 interface ChatPanelProps {
@@ -23,17 +24,30 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const activeRef = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // I4: DB singleton ref — initialized once per agentId load
+  const dbRef = useRef<Db | null>(null)
+  // Mirror of messages state for safe reads inside async callbacks
+  const messagesRef = useRef<ChatMessage[]>([])
+
+  // Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   // Load agent info and most recent session on agentId change
   useEffect(() => {
     if (!agentId) return
     activeRef.current = true
     setMessages([])
+    messagesRef.current = []
     setStreamingContent('')
     setInput('')
 
     async function load() {
+      // I4: open DB once and store in ref
       const db = await initDb()
+      dbRef.current = db
+
       const agentRepo = new AgentRepository(db)
       const sessionRepo = new SessionRepository(db)
 
@@ -46,7 +60,9 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
       if (sessions.length > 0) {
         const latest = sessions[0]
         setSessionId(latest.id)
-        setMessages((latest.messages as ChatMessage[]) ?? [])
+        const loaded = (latest.messages as ChatMessage[]) ?? []
+        setMessages(loaded)
+        messagesRef.current = loaded
       } else {
         const newId = await sessionRepo.create({ agentId: agentId!, messages: [], tokenCount: 0, costEstimate: 0 })
         setSessionId(newId)
@@ -68,6 +84,13 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
   const sendMessage = useCallback(async () => {
     if (!input.trim() || isStreaming || !agentId || !sessionId) return
 
+    // I3: capture agentId as a local const before any awaits
+    const currentAgentId: string = agentId
+    const currentSessionId: string = sessionId
+
+    // I4: reuse the singleton DB; it was initialised in the load useEffect
+    const db = dbRef.current!
+
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -77,30 +100,35 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
 
     const currentInput = input.trim()
     setInput('')
-    setMessages(prev => [...prev, userMsg])
+
+    // Snapshot messages before the state update so we have the full list
+    // including the user message without relying on async state reads
+    const messagesAtSend = [...messagesRef.current, userMsg]
+    setMessages(messagesAtSend)
+    messagesRef.current = messagesAtSend
+
     setIsStreaming(true)
     setStreamingContent('')
-    activeRef.current = true
+    // I1: do NOT re-arm activeRef here; the load useEffect owns it
 
     try {
-      const db = await initDb()
       const agentRepo = new AgentRepository(db)
-      const agentRow = await agentRepo.findById(agentId)
+      const agentRow = await agentRepo.findById(currentAgentId)
       if (!agentRow) throw new Error('Agent not found')
 
       const provider = AGENT_REGISTRY.get(agentRow.type)
       if (!provider) throw new Error(`No provider for type: ${agentRow.type}`)
 
       const session: AgentSession = {
-        id: sessionId,
-        agentId,
+        id: currentSessionId,
+        agentId: currentAgentId,
         permissionScope: { allowedPaths: [], allowedDomains: [], shellEnabled: false },
       }
 
       // Emit running status
       getEventBus().emit({
         type: 'agent:status-changed',
-        agentId,
+        agentId: currentAgentId,
         status: 'running',
         timestamp: Date.now(),
       })
@@ -118,21 +146,23 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
           setStreamingContent(accumulated)
           getEventBus().emit({
             type: 'agent:action',
-            agentId,
+            agentId: currentAgentId,
             action: 'text',
             detail: delta,
             timestamp: Date.now(),
           })
         } else if (e.type === 'status-change') {
           const status = (e.payload as { status: AgentStatus }).status
-          getEventBus().emit({ type: 'agent:status-changed', agentId, status, timestamp: Date.now() })
+          getEventBus().emit({ type: 'agent:status-changed', agentId: currentAgentId, status, timestamp: Date.now() })
         } else if (e.type === 'approval-request') {
           const req = e.payload as import('@/lib/interfaces').ApprovalRequest
           getEventBus().emit({ type: 'agent:approval-requested', request: req, timestamp: Date.now() })
         }
       }
 
-      // Finalize streaming content as assistant message
+      // C1: build the final messages array outside the state setter, then
+      //     call setMessages and updateMessages separately (no side effects
+      //     inside the setState callback).
       if (accumulated && activeRef.current) {
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -140,13 +170,12 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
           content: accumulated,
           timestamp: Date.now(),
         }
-        setMessages(prev => {
-          const updated = [...prev, assistantMsg]
-          // Persist to DB
-          const sessionRepo = new SessionRepository(db)
-          sessionRepo.updateMessages(sessionId, updated).catch(console.error)
-          return updated
-        })
+        // Use messagesAtSend (the snapshot that includes the user message)
+        const allMessages = [...messagesAtSend, assistantMsg]
+        setMessages(allMessages)
+        messagesRef.current = allMessages
+        const sessionRepo = new SessionRepository(db)
+        await sessionRepo.updateMessages(currentSessionId, allMessages)
       }
     } catch (err) {
       const errMsg: ChatMessage = {
@@ -159,7 +188,17 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
     } finally {
       setIsStreaming(false)
       setStreamingContent('')
-      getEventBus().emit({ type: 'agent:status-changed', agentId: agentId!, status: 'idle', timestamp: Date.now() })
+      // I3: use captured currentAgentId — no non-null assertion needed
+      getEventBus().emit({ type: 'agent:status-changed', agentId: currentAgentId, status: 'idle', timestamp: Date.now() })
+
+      // I2: always persist at least the user message (best-effort)
+      try {
+        const sessionRepo = new SessionRepository(db)
+        // messagesRef.current has the most up-to-date list (may include
+        // assistant reply if the success path ran); messagesAtSend is the
+        // floor — the user message is always present in either.
+        await sessionRepo.updateMessages(currentSessionId, messagesRef.current)
+      } catch { /* best-effort */ }
     }
   }, [input, isStreaming, agentId, sessionId])
 
