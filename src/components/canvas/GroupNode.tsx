@@ -1,9 +1,11 @@
 // src/components/canvas/GroupNode.tsx
 'use client'
 import { type NodeProps } from 'reactflow'
+import type { CanvasNode } from '@/lib/interfaces'
 
 export interface GroupNodeData {
   label: string
+  [key: string]: unknown
 }
 
 export function GroupNode({ data, selected }: NodeProps<GroupNodeData>) {
@@ -14,4 +16,12 @@ export function GroupNode({ data, selected }: NodeProps<GroupNodeData>) {
       </div>
     </div>
   )
+}
+
+export const GroupNodeDef: CanvasNode<GroupNodeData> = {
+  nodeType: 'group',
+  defaultData(): GroupNodeData {
+    return { label: 'New Group' }
+  },
+  CardComponent: GroupNode,
 }

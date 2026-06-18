@@ -1,6 +1,6 @@
 // src/components/canvas/AgentCanvas.tsx
 'use client'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import ReactFlow, {
   Background,
   Controls,
@@ -12,30 +12,34 @@ import ReactFlow, {
   type Viewport,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { AgentCardNode, type AgentNodeData } from './AgentCardNode'
-import { GroupNode, type GroupNodeData } from './GroupNode'
+import { type AgentNodeData } from './AgentCardNode'
+import { type GroupNodeData } from './GroupNode'
+import { CanvasEdge } from './CanvasEdge'
 import { saveAgentPosition, saveCanvasState, loadCanvasState } from '@/lib/canvas/persistence'
+import { getNodeTypes } from '@/lib/canvas/node-registry'
 
-const NODE_TYPES = {
-  agentCard: AgentCardNode,
-  group: GroupNode,
-}
+const EDGE_TYPES = { custom: CanvasEdge }
 
 const EDGE_OPTIONS = {
   style: { stroke: '#7c6af7', strokeWidth: 1.5, opacity: 0.7 },
   animated: true,
 }
 
+const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
+
 export function AgentCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeData | GroupNodeData>([])
-  const [edges, , onEdgesChange] = useEdgesState<Edge[]>([])
+  const [edges, , onEdgesChange] = useEdgesState<Edge>([])
+  const [defaultViewport, setDefaultViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
 
   useEffect(() => {
-    loadCanvasState().then((state) => {
-      if (state) {
-        // restore viewport handled by defaultViewport prop
-      }
-    })
+    loadCanvasState()
+      .then((state) => {
+        if (state) {
+          setDefaultViewport(state.viewport)
+        }
+      })
+      .catch((e: unknown) => console.error('Failed to load canvas state', e))
   }, [])
 
   const handleNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
@@ -45,8 +49,9 @@ export function AgentCanvas() {
   }, [])
 
   const handleMoveEnd = useCallback((_: MouseEvent | TouchEvent, viewport: Viewport) => {
-    saveCanvasState(viewport, [])
-  }, [])
+    const groupNodes = nodes.filter((n) => n.type === 'group')
+    saveCanvasState(viewport, groupNodes)
+  }, [nodes])
 
   return (
     <div className="w-full h-full bg-[#080910]">
@@ -55,11 +60,12 @@ export function AgentCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        nodeTypes={NODE_TYPES}
+        nodeTypes={getNodeTypes()}
+        edgeTypes={EDGE_TYPES}
         defaultEdgeOptions={EDGE_OPTIONS}
+        defaultViewport={defaultViewport}
         onNodeDragStop={handleNodeDragStop}
         onMoveEnd={handleMoveEnd}
-        fitView
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#1e1f2e" gap={24} size={0.8} />

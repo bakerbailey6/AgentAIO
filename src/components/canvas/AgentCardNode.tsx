@@ -4,6 +4,7 @@ import { Handle, Position, type NodeProps } from 'reactflow'
 import { AgentCard } from './AgentCard'
 import { useApprovals } from '@/hooks/useApprovals'
 import { AGENT_REGISTRY } from '@/lib/agents/registry'
+import type { CanvasNode } from '@/lib/interfaces'
 
 export interface AgentNodeData {
   label: string
@@ -13,6 +14,7 @@ export interface AgentNodeData {
   modelName: string
   toolCount: number
   agentType: string
+  [key: string]: unknown
 }
 
 export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
@@ -40,4 +42,12 @@ export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
       <Handle type="source" position={Position.Right} className="w-2.5 h-2.5 bg-violet-600 border-2 border-[#0d0e18]" />
     </div>
   )
+}
+
+export const AgentCardNodeDef: CanvasNode<AgentNodeData> = {
+  nodeType: 'agentCard',
+  defaultData(): AgentNodeData {
+    return { label: 'New Agent', agentId: '', name: '', icon: '🤖', modelName: '', toolCount: 0, agentType: '' }
+  },
+  CardComponent: AgentCardNode,
 }
