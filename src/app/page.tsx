@@ -6,20 +6,23 @@ import { TopBar } from '@/components/layout/TopBar'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { AgentCanvas } from '@/components/canvas/AgentCanvas'
 import { StorePanel } from '@/components/store/StorePanel'
+import SettingsPanel from '@/components/settings/SettingsPanel'
 import { useApprovals } from '@/hooks/useApprovals'
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState<'home' | 'chat' | 'workflows' | 'store' | 'settings'>('home')
+  const [showCreateAgent, setShowCreateAgent] = useState(false)
   const approvals = useApprovals()
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar activeItem={activeNav} onNavigate={setActiveNav} />
       <div className="flex flex-col flex-1 min-w-0">
-        <TopBar approvalCount={approvals.length} onAddAgent={() => setActiveNav('store')} />
+        <TopBar approvalCount={approvals.length} onAddAgent={() => setShowCreateAgent(true)} />
         <div className="flex-1 relative overflow-hidden">
           <AgentCanvas />
           {activeNav === 'store' && <StorePanel onClose={() => setActiveNav('home')} />}
+          {activeNav === 'settings' && <SettingsPanel onClose={() => setActiveNav('home')} />}
         </div>
         <StatusBar
           runningCount={0} idleCount={0} approvalCount={approvals.length}

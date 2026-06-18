@@ -1,13 +1,13 @@
 'use client'
 import { cn } from '@/lib/utils'
-import { LayoutGrid, Bot, Package, Settings } from 'lucide-react'
+import { LayoutGrid, MessageSquare, GitBranch, Package, Settings } from 'lucide-react'
 
 type NavItem = 'home' | 'chat' | 'workflows' | 'store' | 'settings'
 
 const NAV_ITEMS: Array<{ id: NavItem; label: string; Icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'home', label: 'Home', Icon: LayoutGrid },
-  { id: 'chat', label: 'Chat', Icon: Bot },
-  { id: 'workflows', label: 'Workflows', Icon: Package },
+  { id: 'chat', label: 'Chat', Icon: MessageSquare },
+  { id: 'workflows', label: 'Workflows', Icon: GitBranch },
   { id: 'store', label: 'Store', Icon: Package },
 ]
 
@@ -37,7 +37,13 @@ export function Sidebar({ activeItem, onNavigate }: SidebarProps) {
       <div className="flex-1" />
       <button
         aria-label="Settings"
-        className="w-9 h-9 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-all duration-150"
+        onClick={() => onNavigate('settings')}
+        className={cn(
+          'w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-150',
+          activeItem === 'settings'
+            ? 'bg-violet-600 text-white'
+            : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]',
+        )}
       >
         <Settings className="w-[18px] h-[18px]" />
       </button>
