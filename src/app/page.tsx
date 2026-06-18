@@ -1,6 +1,6 @@
 // src/app/page.tsx
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { StatusBar } from '@/components/layout/StatusBar'
@@ -19,6 +19,10 @@ export default function Home() {
   const [chatAgentId, setChatAgentId] = useState<string | null>(null)
   const approvals = useApprovals()
 
+  const handleOpenChat = useCallback((agentId: string) => {
+    setChatAgentId(agentId)
+  }, [])
+
   useEffect(() => {
     initDb()
       .then((db) => new AgentRepository(db).findAll())
@@ -34,7 +38,7 @@ export default function Home() {
         <div className="flex-1 relative overflow-hidden">
           <AgentCanvas
             agents={agents}
-            onOpenChat={(agentId) => setChatAgentId(agentId)}
+            onOpenChat={handleOpenChat}
           />
           {activeNav === 'store' && <StorePanel onClose={() => setActiveNav('home')} />}
           {activeNav === 'settings' && <SettingsPanel onClose={() => setActiveNav('home')} />}
@@ -43,7 +47,7 @@ export default function Home() {
             onClose={() => setShowCreateAgent(false)}
             onCreated={(row) => {
               setAgents((prev) => [...prev, row])
-              setShowCreateAgent(false)
+              // do NOT setShowCreateAgent(false) here — onClose handles that
             }}
           />
           {/* ChatPanel rendered in Task C */}

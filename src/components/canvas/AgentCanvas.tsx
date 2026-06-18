@@ -1,6 +1,6 @@
 // src/components/canvas/AgentCanvas.tsx
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -38,6 +38,7 @@ export function AgentCanvas({ agents, onOpenChat }: AgentCanvasProps) {
   const [savedViewport, setSavedViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 })
 
   const nodeTypes = useMemo(() => getNodeTypes(), [])
+  const initializedRef = useRef(false)
 
   useEffect(() => {
     loadCanvasState()
@@ -70,7 +71,25 @@ export function AgentCanvas({ agents, onOpenChat }: AgentCanvasProps) {
     })), [agents, onOpenChat])
 
   useEffect(() => {
-    setNodes(agentNodes)
+    if (!initializedRef.current) {
+      // First load: set nodes with positions from DB
+      setNodes(agentNodes)
+      initializedRef.current = true
+    } else {
+      // Subsequent updates (e.g. new agent added): merge — add new nodes, update data on
+      // existing ones, but don't move nodes the user may have dragged
+      setNodes(prev => {
+        const existingIds = new Set(prev.map(n => n.id))
+        const newNodes = agentNodes.filter(n => !existingIds.has(n.id))
+        const updatedPrev = prev.map(prevNode => {
+          const updated = agentNodes.find(n => n.id === prevNode.id)
+          if (!updated) return prevNode
+          // Update data but preserve position
+          return { ...prevNode, data: updated.data }
+        })
+        return [...updatedPrev, ...newNodes]
+      })
+    }
   }, [agentNodes, setNodes])
 
   const handleNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
