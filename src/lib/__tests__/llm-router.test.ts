@@ -8,10 +8,14 @@ vi.mock('@/lib/keychain', () => ({
 }))
 vi.mock('@/lib/storage', () => ({
   initDb: vi.fn(async () => ({
-    select: vi.fn(async () => [{
-      id: 'model-1', provider: 'anthropic', model_name: 'claude-sonnet-4-6',
-      display_name: 'Claude Sonnet 4.6', api_key_ref: 'anthropic-key', base_url: null,
-    }]),
+    select: vi.fn(async (_sql: string, params?: unknown[]) => {
+      const id = Array.isArray(params) ? params[0] : undefined
+      if (id !== 'model-1') return []
+      return [{
+        id: 'model-1', provider: 'anthropic', model_name: 'claude-sonnet-4-6',
+        display_name: 'Claude Sonnet 4.6', api_key_ref: 'anthropic-key', base_url: null,
+      }]
+    }),
   })),
 }))
 
