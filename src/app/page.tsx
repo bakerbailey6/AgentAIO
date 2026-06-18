@@ -21,7 +21,7 @@ export default function Home() {
   const [agents, setAgents] = useState<AgentRow[]>([])
   const [chatAgentId, setChatAgentId] = useState<string | null>(null)
   const approvals = useApprovals()
-  const { running, idle, awaitingApproval } = useAgentCounts()
+  const { running, idle } = useAgentCounts()
   const [modelsConnected, setModelsConnected] = useState(0)
 
   const handleOpenChat = useCallback((agentId: string) => {

@@ -111,6 +111,8 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
     setStreamingContent('')
     // I1: do NOT re-arm activeRef here; the load useEffect owns it
 
+    let persisted = false
+
     try {
       const agentRepo = new AgentRepository(db)
       const agentRow = await agentRepo.findById(currentAgentId)
@@ -176,6 +178,7 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
         messagesRef.current = allMessages
         const sessionRepo = new SessionRepository(db)
         await sessionRepo.updateMessages(currentSessionId, allMessages)
+        persisted = true
       }
     } catch (err) {
       const errMsg: ChatMessage = {
@@ -192,13 +195,15 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
       getEventBus().emit({ type: 'agent:status-changed', agentId: currentAgentId, status: 'idle', timestamp: Date.now() })
 
       // I2: always persist at least the user message (best-effort)
-      try {
-        const sessionRepo = new SessionRepository(db)
-        // messagesRef.current has the most up-to-date list (may include
-        // assistant reply if the success path ran); messagesAtSend is the
-        // floor — the user message is always present in either.
-        await sessionRepo.updateMessages(currentSessionId, messagesRef.current)
-      } catch { /* best-effort */ }
+      if (!persisted) {
+        try {
+          const sessionRepo = new SessionRepository(db)
+          // messagesRef.current has the most up-to-date list (may include
+          // assistant reply if the success path ran); messagesAtSend is the
+          // floor — the user message is always present in either.
+          await sessionRepo.updateMessages(currentSessionId, messagesRef.current)
+        } catch { /* best-effort */ }
+      }
     }
   }, [input, isStreaming, agentId, sessionId])
 
