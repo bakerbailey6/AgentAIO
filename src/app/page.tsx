@@ -16,7 +16,7 @@ export default function Home() {
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar activeItem={activeNav} onNavigate={setActiveNav} />
       <div className="flex flex-col flex-1 min-w-0">
-        <TopBar approvalCount={approvals.length} onAddAgent={() => {}} />
+        <TopBar approvalCount={approvals.length} onAddAgent={() => setActiveNav('store')} />
         <div className="flex-1 relative overflow-hidden">
           <AgentCanvas />
           {activeNav === 'store' && <StorePanel onClose={() => setActiveNav('home')} />}
