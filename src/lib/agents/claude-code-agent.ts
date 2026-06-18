@@ -57,12 +57,11 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
           await new Promise((r) => setTimeout(r, 50))
         }
       }
+      yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'idle' } }
     } finally {
       unlisten()
       this.processes.delete(session.id)
     }
-
-    yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'idle' } }
   }
 
   async stop(sessionId: string): Promise<void> {
