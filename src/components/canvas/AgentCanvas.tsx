@@ -17,6 +17,7 @@ import { type GroupNodeData } from './GroupNode'
 import { CanvasEdge } from './CanvasEdge'
 import { saveAgentPosition, saveCanvasState, loadCanvasState } from '@/lib/canvas/persistence'
 import { getNodeTypes } from '@/lib/canvas/node-registry'
+import type { AgentRow } from '@/lib/storage'
 
 const EDGE_TYPES = { custom: CanvasEdge }
 
@@ -25,7 +26,12 @@ const EDGE_OPTIONS = {
   animated: true,
 }
 
-export function AgentCanvas() {
+interface AgentCanvasProps {
+  agents: AgentRow[]
+  onOpenChat: (agentId: string) => void
+}
+
+export function AgentCanvas({ agents, onOpenChat }: AgentCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeData | GroupNodeData>([])
   const [edges, , onEdgesChange] = useEdgesState([])
   const [loaded, setLoaded] = useState(false)
@@ -43,6 +49,29 @@ export function AgentCanvas() {
       .catch((e: unknown) => console.error('Failed to load canvas state', e))
       .finally(() => setLoaded(true))
   }, [])
+
+  const agentNodes = useMemo<Node<AgentNodeData>[]>(() =>
+    agents.map((row) => ({
+      id: row.id,
+      type: 'agentCard',
+      position: { x: row.canvasX, y: row.canvasY },
+      data: {
+        label: row.name,
+        agentId: row.id,
+        name: row.name,
+        icon: row.type === 'llm' ? '🤖' : row.type === 'coding-agent' ? '🧑‍💻' : '⚡',
+        modelName: row.modelId ?? 'No model',
+        toolCount: (row.toolIds ?? []).length,
+        agentType: row.type,
+        status: 'idle' as const,
+        actions: [],
+        onOpenChat: () => onOpenChat(row.id),
+      },
+    })), [agents, onOpenChat])
+
+  useEffect(() => {
+    setNodes(agentNodes)
+  }, [agentNodes, setNodes])
 
   const handleNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.type === 'agentCard') {
