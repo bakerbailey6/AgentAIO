@@ -20,6 +20,9 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
   async *run(session: AgentSession, input: string): AsyncIterable<AgentEvent> {
     yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'running' } }
 
+    if (!session.projectDirectory) {
+      throw new Error(`${this.displayName} requires a project directory`)
+    }
     const processId = await invoke<string>('spawn_process', {
       cmd: 'claude',
       args: ['--print', '--output-format', 'stream-json', input],
@@ -46,15 +49,19 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
       }
     })
 
-    while (!done || eventQueue.length > 0) {
-      if (eventQueue.length > 0) {
-        yield eventQueue.shift()!
-      } else {
-        await new Promise((r) => setTimeout(r, 50))
+    try {
+      while (!done || eventQueue.length > 0) {
+        if (eventQueue.length > 0) {
+          yield eventQueue.shift()!
+        } else {
+          await new Promise((r) => setTimeout(r, 50))
+        }
       }
+    } finally {
+      unlisten()
+      this.processes.delete(session.id)
     }
 
-    unlisten()
     yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'idle' } }
   }
 
@@ -71,7 +78,7 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
     if (processId) await invoke('send_stdin', { processId, data: 'y\n' })
   }
 
-  async deny(requestId: string): Promise<void> {
+  async deny(requestId: string, _reason?: string): Promise<void> {
     const processId = this.processes.get(requestId)
     if (processId) await invoke('send_stdin', { processId, data: 'n\n' })
   }
