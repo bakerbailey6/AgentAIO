@@ -3,6 +3,7 @@
 import { Handle, Position, type NodeProps } from 'reactflow'
 import { AgentCard } from './AgentCard'
 import { useApprovals } from '@/hooks/useApprovals'
+import { useAgentActions } from '@/hooks/useAgentActions'
 import { AGENT_REGISTRY } from '@/lib/agents/registry'
 import type { CanvasNode } from '@/lib/interfaces'
 
@@ -21,9 +22,17 @@ export interface AgentNodeData {
 export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
   const approvals = useApprovals().filter((a) => a.agentId === data.agentId)
   const provider = AGENT_REGISTRY.get(data.agentType)
+  const rawActions = useAgentActions(data.agentId)
 
   const handleApprove = (requestId: string) => provider?.approve(requestId)
   const handleDeny = (requestId: string) => provider?.deny(requestId)
+
+  const actions = rawActions.map((entry, i) => ({
+    id: `${entry.timestamp}-${i}`,
+    text: entry.detail,
+    type: 'info' as const,
+    timestamp: entry.timestamp,
+  }))
 
   return (
     <div className="relative">
@@ -34,7 +43,7 @@ export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
         icon={data.icon}
         modelName={data.modelName}
         toolCount={data.toolCount}
-        actions={[]}
+        actions={actions}
         pendingApprovals={approvals}
         onApprove={handleApprove}
         onDeny={handleDeny}

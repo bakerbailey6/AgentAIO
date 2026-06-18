@@ -10,7 +10,9 @@ import SettingsPanel from '@/components/settings/SettingsPanel'
 import CreateAgentPanel from '@/components/agents/CreateAgentPanel'
 import ChatPanel from '@/components/chat/ChatPanel'
 import { useApprovals } from '@/hooks/useApprovals'
+import { useAgentCounts } from '@/hooks/useAgentCounts'
 import { initDb, AgentRepository } from '@/lib/storage'
+import { ModelRepository } from '@/lib/storage/repositories/models'
 import type { AgentRow } from '@/lib/storage'
 
 export default function Home() {
@@ -19,6 +21,8 @@ export default function Home() {
   const [agents, setAgents] = useState<AgentRow[]>([])
   const [chatAgentId, setChatAgentId] = useState<string | null>(null)
   const approvals = useApprovals()
+  const { running, idle, awaitingApproval } = useAgentCounts()
+  const [modelsConnected, setModelsConnected] = useState(0)
 
   const handleOpenChat = useCallback((agentId: string) => {
     setChatAgentId(agentId)
@@ -29,6 +33,13 @@ export default function Home() {
       .then((db) => new AgentRepository(db).findAll())
       .then(setAgents)
       .catch(console.error)
+  }, [])
+
+  useEffect(() => {
+    initDb()
+      .then(db => new ModelRepository(db).findAll())
+      .then(rows => setModelsConnected(rows.length))
+      .catch(() => {})
   }, [])
 
   return (
@@ -54,8 +65,13 @@ export default function Home() {
           <ChatPanel agentId={chatAgentId} onClose={() => setChatAgentId(null)} />
         </div>
         <StatusBar
-          runningCount={0} idleCount={0} approvalCount={approvals.length}
-          llmCallsToday={0} estimatedCost={0} modelsConnected={0} toolsActive={0}
+          runningCount={running}
+          idleCount={idle}
+          approvalCount={approvals.length}
+          llmCallsToday={0}
+          estimatedCost={0}
+          modelsConnected={modelsConnected}
+          toolsActive={0}
         />
       </div>
     </div>
