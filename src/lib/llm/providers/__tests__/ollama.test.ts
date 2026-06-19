@@ -24,6 +24,7 @@ describe('OllamaProvider', () => {
   describe('listModels', () => {
     it('maps the /api/tags response into Ollama models', async () => {
       const fetchMock = vi.fn(async () => ({
+        ok: true,
         json: async () => ({ models: [{ name: 'llama3' }, { name: 'qwen2.5' }] }),
       }))
       vi.stubGlobal('fetch', fetchMock)
@@ -39,7 +40,7 @@ describe('OllamaProvider', () => {
     })
 
     it('uses a custom baseUrl when provided', async () => {
-      const fetchMock = vi.fn(async () => ({ json: async () => ({ models: [] }) }))
+      const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ models: [] }) }))
       vi.stubGlobal('fetch', fetchMock)
 
       const provider = new OllamaProvider()
@@ -48,17 +49,25 @@ describe('OllamaProvider', () => {
       expect(fetchMock).toHaveBeenCalledWith('http://remote:11434/api/tags')
     })
 
-    // FINDING: listModels swallows fetch failures and returns [] instead of
-    // throwing, so an unreachable server is indistinguishable from a running
-    // server with zero models. Documented here; reported in the WP2 summary.
-    it('returns an empty array (does not throw) when the server is unreachable', async () => {
+    // Previously listModels swallowed fetch failures and returned [], making an
+    // unreachable server indistinguishable from a running server with zero
+    // models. It now propagates the failure so callers can surface it.
+    it('throws (does not return []) when the server is unreachable', async () => {
       const fetchMock = vi.fn(async () => {
         throw new Error('ECONNREFUSED')
       })
       vi.stubGlobal('fetch', fetchMock)
 
       const provider = new OllamaProvider()
-      await expect(provider.listModels({})).resolves.toEqual([])
+      await expect(provider.listModels({})).rejects.toThrow(/ECONNREFUSED|reach Ollama/)
+    })
+
+    it('throws when the server responds with a non-OK HTTP status', async () => {
+      const fetchMock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const provider = new OllamaProvider()
+      await expect(provider.listModels({})).rejects.toThrow(/500/)
     })
   })
 
