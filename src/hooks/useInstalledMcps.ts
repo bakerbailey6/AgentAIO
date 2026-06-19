@@ -7,8 +7,9 @@ import type { CatalogMcpEntry } from '@/lib/store/catalog'
  * Manage the user's installed MCP servers for the store UI.
  *
  * Loads installed servers from storage on mount and returns the list plus
- * `install` / `uninstall` / `isInstalled` helpers that keep the database and the
- * in-memory list in sync. `install` maps a catalog entry to a new `mcps` row.
+ * `install` / `uninstall` / `isInstalled` / `installedId` helpers that keep the
+ * database and the in-memory list in sync. `install` maps a catalog entry to a
+ * new `mcps` row.
  */
 export function useInstalledMcps() {
   const [mcps, setMcps] = useState<McpRow[]>([])
@@ -53,5 +54,10 @@ export function useInstalledMcps() {
     return mcps.some(m => m.name === name)
   }
 
-  return { mcps, install, uninstall, isInstalled }
+  /** The persisted row id for an installed MCP server name, or `undefined`. */
+  function installedId(name: string): string | undefined {
+    return mcps.find(m => m.name === name)?.id
+  }
+
+  return { mcps, install, uninstall, isInstalled, installedId }
 }

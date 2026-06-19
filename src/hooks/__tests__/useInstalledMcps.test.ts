@@ -122,4 +122,26 @@ describe('useInstalledMcps', () => {
     expect(result.current.isInstalled('installed-mcp')).toBe(true)
     expect(result.current.isInstalled('other-mcp')).toBe(false)
   })
+
+  it('installedId returns the row id for a known name and undefined otherwise', async () => {
+    const existingRow = {
+      id: 'row-1',
+      name: 'installed-mcp',
+      transport: 'stdio' as const,
+      commandOrUrl: 'npx installed-mcp',
+      envVarsRef: [],
+      enabled: true,
+      createdAt: 0,
+    }
+    mockFindAll.mockResolvedValue([existingRow])
+
+    const { result } = renderHook(() => useInstalledMcps())
+
+    await waitFor(() => {
+      expect(result.current.mcps).toHaveLength(1)
+    })
+
+    expect(result.current.installedId('installed-mcp')).toBe('row-1')
+    expect(result.current.installedId('missing-mcp')).toBeUndefined()
+  })
 })

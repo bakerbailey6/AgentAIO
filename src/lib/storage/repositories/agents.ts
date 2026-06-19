@@ -93,6 +93,45 @@ export class AgentRepository {
     )
   }
 
+  /** Replace an agent's assigned MCP server ids (the store's assign action). */
+  async updateMcpIds(id: string, mcpIds: string[]): Promise<void> {
+    await this.db.execute(
+      'UPDATE agents SET mcp_ids = $1 WHERE id = $2',
+      [JSON.stringify(mcpIds), id],
+    )
+  }
+
+  /**
+   * Patch an agent's editable fields. Builds the SET clause from the provided
+   * keys in a fixed column order (`name`, `model_id`, `system_prompt`), so the
+   * positional params are deterministic. A no-op (empty patch) issues no SQL.
+   */
+  async update(
+    id: string,
+    patch: { name?: string; modelId?: string | null; systemPrompt?: string },
+  ): Promise<void> {
+    const sets: string[] = []
+    const params: unknown[] = []
+    if ('name' in patch) {
+      sets.push(`name = $${params.length + 1}`)
+      params.push(patch.name)
+    }
+    if ('modelId' in patch) {
+      sets.push(`model_id = $${params.length + 1}`)
+      params.push(patch.modelId)
+    }
+    if ('systemPrompt' in patch) {
+      sets.push(`system_prompt = $${params.length + 1}`)
+      params.push(patch.systemPrompt)
+    }
+    if (sets.length === 0) return
+    params.push(id)
+    await this.db.execute(
+      `UPDATE agents SET ${sets.join(', ')} WHERE id = $${params.length}`,
+      params,
+    )
+  }
+
   /** Delete an agent (its sessions cascade away via the FK). */
   async delete(id: string): Promise<void> {
     await this.db.execute('DELETE FROM agents WHERE id = $1', [id])
