@@ -20,10 +20,10 @@
 
 | | |
 |---|---|
-| **Phase** | Phase 5 (MCP servers connect) landed — native Tauri stdio transport + assigned MCP tools routed through the agent loop; SSE works in-renderer. Only the two spec phases remain: Workflow Builder (S2) + Autonomous Executor (S3), each needing a design pass |
-| **Verified baseline** | `npx vitest run` → **411 passing · 76 files** (observed 2026-06-19, post Phase-5; run from the worktree, not the main checkout). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`) — stdio MCP deliberately kept out of the web bundle. Web-mode Playwright e2e → **4/4 pass**. `cargo test` (src-tauri) → **32 passing** (unchanged; Phase 5 added no Rust). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **Phase** | Workflow Builder **W1 (core engine + editor)** landed — a visual node graph (`start`/`agent`/`tool`/`output`/`join`), an in-process readiness execution engine (sequential + parallel + join), and a dedicated React Flow editor under the **Workflows** nav. Remaining: Workflow Builder **W2** (control flow: conditional/loop/transform) + **W3** (data-wiring UX + run history), then **Autonomous Executor** (spec §3.3). |
+| **Verified baseline** | `npx vitest run` → **506 passing · 89 files** (observed 2026-06-19, post Workflow-Builder-W1; run from the worktree, not the main checkout). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`) — the React Flow editor stays in the client bundle cleanly. Web-mode Playwright e2e → **5/5 pass** (app shell + Workflows nav opens the panel). `cargo test` (src-tauri) → **32 passing** (unchanged; W1 added no Rust). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
-| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix and the Phase 3–4 runtime (tool calls, real file/shell execution, approval round-trips) all need a real desktop round-trip to confirm. |
+| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix, the Phase 3–5 runtime (tool calls, real file/shell execution, approval round-trips, MCP connect), and Workflow Builder W1 (persist/list/run a workflow — needs the SQLite vault + a real agent node) all need a real desktop round-trip to confirm. |
 | **Rust tests** | ✅ `cargo test` (src-tauri) green — **32 passing** (AppHandle-free helpers, incl. the new `fs.rs` path-guard tests). MockRuntime command-level tests stay behind the `mock-runtime-tests` feature (off on this host). |
 | **Design spec** | [agent-command-center-design.md](../specs/2026-06-18-agent-command-center-design.md) |
 
@@ -152,6 +152,23 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Workflow Builder W1 landed: core engine + editor** (brainstorm → spec
+  [`2026-06-19-workflow-builder-design.md`](../specs/2026-06-19-workflow-builder-design.md) → plan
+  [`2026-06-19-workflow-builder-w1.md`](2026-06-19-workflow-builder-w1.md) → built by ~14 parallel
+  worktree tasks in dependency waves, each Tier-1 adversarially QA'd; engine + editor + panel got
+  dedicated QA passes). New `WorkflowNodeDef` registry (`WORKFLOW_NODE_REGISTRY`) with five node types
+  (`start`/`agent`/`tool`/`output`/`join`); a `workflows` + `workflow_runs` storage layer; an in-process
+  **readiness execution engine** (`src/lib/workflows/engine.ts` — a node runs once its inputs are ready,
+  independent nodes run concurrently, `join` barriers); `workflow:*` bus events + a `useWorkflowRun`
+  hook; and a dedicated React Flow **WorkflowEditor** (palette · port-wired edges · config rail · Run
+  modal · live per-node status) reached via the new **Workflows** panel in the sidebar. Verified:
+  `npx tsc --noEmit` clean; `npx vitest run` → **506 passing / 89 files** (+95); `eslint` on changed
+  files → no errors; `npm run build` → `out/` emitted (static export intact — the editor bundles
+  cleanly); web e2e → 5/5 (Workflows nav opens the panel). The four pre-existing exhaustive registry
+  tests are untouched; W1 adds a new `WORKFLOW_NODE_REGISTRY` exhaustive test. ⚠️ Persisting/listing/
+  **running** a workflow needs the desktop SQLite vault (+ a real agent for `agent` nodes) — a
+  `tauri:dev` checklist. Remaining: **W2** (conditional/loop/transform) + **W3** (data-wiring UX + run
+  history), then the **Autonomous Executor**.
 - **2026-06-19** — **Phase 5 landed: MCP servers connect** (implemented solo in the integration worktree —
   the parallel-agent model was thrashing the shared `node_modules` via competing installs, so a single-writer
   pass was safer; adversarially Tier-1 QA'd after). New `src/lib/mcp/tauri-stdio-transport.ts`: an MCP
