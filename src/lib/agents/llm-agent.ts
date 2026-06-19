@@ -1,4 +1,13 @@
-// src/lib/agents/llm-agent.ts
+/**
+ * The default agent runtime: a streaming LLM chat loop.
+ *
+ * Resolves the agent's configured model through the {@link LLMRouter}, streams
+ * the response with the Vercel AI SDK's `streamText`, and re-emits text deltas
+ * as {@link AgentEvent}s for the canvas. Unlike the coding agents it needs no
+ * project directory and runs entirely in-process.
+ *
+ * @module
+ */
 import { streamText } from 'ai'
 import type { AgentProvider, AgentEvent, AgentSession, AgentCapabilities } from '@/lib/interfaces'
 import { LLMRouter } from '@/lib/llm/router'

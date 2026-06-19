@@ -7,6 +7,14 @@ export interface OllamaModel extends BaseModel {
   provider: 'ollama'
 }
 
+/**
+ * Local Ollama provider, backed by `@ai-sdk/openai-compatible`.
+ *
+ * Unlike the cloud providers, {@link listModels} actually queries the running
+ * Ollama server (`/api/tags`) so the model picker reflects what is installed
+ * locally; it returns `[]` if the server is unreachable. Defaults to
+ * `http://localhost:11434` when no `baseUrl` is given, and needs no API key.
+ */
 export class OllamaProvider implements LLMProvider<OllamaModel> {
   readonly providerId = 'ollama'
   readonly displayName = 'Ollama (Local)'

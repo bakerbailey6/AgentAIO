@@ -1,4 +1,11 @@
-// src/lib/storage/repositories/tools.ts
+/**
+ * Repository for the `tools` table — installed tool definitions. `definition`
+ * holds the tool's JSON Schema (see {@link ToolDefinition}); `source` records
+ * whether it is built-in, registry-installed, or custom. See
+ * {@link AgentRepository} for the pattern.
+ *
+ * @module
+ */
 import type { Db } from '../db'
 
 export interface ToolRow {

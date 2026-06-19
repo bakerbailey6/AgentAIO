@@ -1,4 +1,10 @@
-// src/lib/storage/repositories/models.ts
+/**
+ * Repository for the `models` table — configured LLM models the user has added.
+ * `apiKeyRef` is a *keychain reference*, not the key itself; the {@link LLMRouter}
+ * resolves it to a secret at call time. See {@link AgentRepository} for the pattern.
+ *
+ * @module
+ */
 import type { Db } from '../db'
 
 export interface ModelRow {
