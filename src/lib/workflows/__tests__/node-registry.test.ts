@@ -9,7 +9,7 @@ import type { WorkflowNodeDef } from '@/lib/interfaces'
 // NOTE: this key assertion is intentionally exhaustive — register a new built-in
 // workflow node and you must update this array (mirrors the provider/agent/tool
 // registry tests).
-const KEYS = ['agent', 'join', 'output', 'start', 'tool']
+const KEYS = ['agent', 'conditional', 'join', 'loop', 'output', 'start', 'tool', 'transform']
 
 describe('WORKFLOW_NODE_REGISTRY', () => {
   it('is a Map keyed by the built-in node types (exhaustive — update when adding one)', () => {

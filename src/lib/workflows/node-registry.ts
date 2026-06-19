@@ -13,6 +13,9 @@ import { AgentNodeDef } from './nodes/agent'
 import { ToolNodeDef } from './nodes/tool'
 import { OutputNodeDef } from './nodes/output'
 import { JoinNodeDef } from './nodes/join'
+import { ConditionalNodeDef } from './nodes/conditional'
+import { TransformNodeDef } from './nodes/transform'
+import { LoopNodeDef } from './nodes/loop'
 
 export const WORKFLOW_NODE_REGISTRY = new Map<string, WorkflowNodeDef>()
 
@@ -35,3 +38,6 @@ registerWorkflowNode(AgentNodeDef as unknown as WorkflowNodeDef)
 registerWorkflowNode(ToolNodeDef as unknown as WorkflowNodeDef)
 registerWorkflowNode(OutputNodeDef)
 registerWorkflowNode(JoinNodeDef as unknown as WorkflowNodeDef)
+registerWorkflowNode(ConditionalNodeDef as unknown as WorkflowNodeDef)
+registerWorkflowNode(TransformNodeDef as unknown as WorkflowNodeDef)
+registerWorkflowNode(LoopNodeDef as unknown as WorkflowNodeDef)
