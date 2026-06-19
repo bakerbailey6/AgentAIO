@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Send } from 'lucide-react'
 import { initDb, AgentRepository, SessionRepository } from '@/lib/storage'
-import { AGENT_REGISTRY } from '@/lib/agents/registry'
+import { AGENT_REGISTRY, resolveAgentRuntimeType } from '@/lib/agents/registry'
 import { getEventBus } from '@/lib/event-bus'
 import type { AgentSession, AgentStatus } from '@/lib/interfaces'
 import type { ChatMessage } from '@/lib/chat/types'
@@ -118,7 +118,7 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
       const agentRow = await agentRepo.findById(currentAgentId)
       if (!agentRow) throw new Error('Agent not found')
 
-      const provider = AGENT_REGISTRY.get(agentRow.type)
+      const provider = AGENT_REGISTRY.get(resolveAgentRuntimeType(agentRow.type))
       if (!provider) throw new Error(`No provider for type: ${agentRow.type}`)
 
       const session: AgentSession = {

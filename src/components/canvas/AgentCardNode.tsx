@@ -4,7 +4,7 @@ import { Handle, Position, type NodeProps } from 'reactflow'
 import { AgentCard } from './AgentCard'
 import { useApprovals } from '@/hooks/useApprovals'
 import { useAgentActions } from '@/hooks/useAgentActions'
-import { AGENT_REGISTRY } from '@/lib/agents/registry'
+import { AGENT_REGISTRY, resolveAgentRuntimeType } from '@/lib/agents/registry'
 import { getEventBus } from '@/lib/event-bus'
 import type { CanvasNode } from '@/lib/interfaces'
 
@@ -22,7 +22,7 @@ export interface AgentNodeData {
 
 export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
   const approvals = useApprovals().filter((a) => a.agentId === data.agentId)
-  const provider = AGENT_REGISTRY.get(data.agentType)
+  const provider = AGENT_REGISTRY.get(resolveAgentRuntimeType(data.agentType))
   const rawActions = useAgentActions(data.agentId)
 
   const handleApprove = (requestId: string) => {
