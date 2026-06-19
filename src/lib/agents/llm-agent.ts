@@ -8,12 +8,15 @@
  *
  * @module
  */
-import { streamText } from 'ai'
+import { streamText, stepCountIs } from 'ai'
 import type { ModelMessage } from 'ai'
 import type { AgentProvider, AgentEvent, AgentSession, AgentCapabilities } from '@/lib/interfaces'
 import type { ChatMessage } from '@/lib/chat/types'
 import { LLMRouter } from '@/lib/llm/router'
 import { initDb, AgentRepository, SessionRepository } from '@/lib/storage'
+import { resolveCapabilities } from './capabilities'
+import { toAiTool } from './tool-adapter'
+import { resolveApproval, abortSessionApprovals } from './approval-gate'
 
 export interface LLMAgentConfig {
   modelId: string
@@ -40,7 +43,6 @@ function stringifyError(err: unknown): string {
   }
   return String(err)
 }
-const pendingApprovals = new Map<string, { resolve: (approved: boolean) => void }>()
 
 export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEvent> {
   readonly type = 'llm'
@@ -69,6 +71,24 @@ export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEven
       )
       const messages: ModelMessage[] = [...history, { role: 'user', content: input }]
 
+      // Resolve the agent's configured capabilities (skills, tools, MCPs). Skill
+      // bodies are injected into the system prompt; tools are exposed to the model.
+      const caps = await resolveCapabilities(agentRow)
+      const system = [agentRow.systemPrompt, ...caps.skillBodies].filter(Boolean).join('\n\n')
+      const tools =
+        caps.tools.size > 0
+          ? Object.fromEntries(
+              [...caps.tools].map(([name, def]) => [
+                name,
+                toAiTool(def, {
+                  agentId: session.agentId,
+                  sessionId: session.id,
+                  permissionScope: session.permissionScope,
+                }),
+              ]),
+            )
+          : undefined
+
       yield {
         type: 'status-change',
         agentId: session.agentId,
@@ -78,8 +98,9 @@ export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEven
 
       const result = streamText({
         model,
-        ...(agentRow.systemPrompt ? { system: agentRow.systemPrompt } : {}),
+        ...(system ? { system } : {}),
         messages,
+        ...(tools ? { tools, stopWhen: stepCountIs(8) } : {}),
       })
 
       for await (const chunk of result.fullStream) {
@@ -89,6 +110,40 @@ export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEven
             agentId: session.agentId,
             timestamp: Date.now(),
             payload: { delta: chunk.text },
+          }
+        } else if (chunk.type === 'tool-call') {
+          yield {
+            type: 'tool-call',
+            agentId: session.agentId,
+            timestamp: Date.now(),
+            payload: {
+              toolCallId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              input: chunk.input,
+            },
+          }
+        } else if (chunk.type === 'tool-result') {
+          yield {
+            type: 'tool-result',
+            agentId: session.agentId,
+            timestamp: Date.now(),
+            payload: {
+              toolCallId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              output: chunk.output,
+            },
+          }
+        } else if (chunk.type === 'tool-error') {
+          yield {
+            type: 'tool-result',
+            agentId: session.agentId,
+            timestamp: Date.now(),
+            payload: {
+              toolCallId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              error: stringifyError(chunk.error),
+              isError: true,
+            },
           }
         } else if (chunk.type === 'error') {
           // The AI SDK surfaces stream failures (bad/missing key, wrong model,
@@ -134,16 +189,15 @@ export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEven
   }
 
   async stop(sessionId: string): Promise<void> {
-    pendingApprovals.get(sessionId)?.resolve(false)
-    pendingApprovals.delete(sessionId)
+    abortSessionApprovals(sessionId)
   }
 
   async approve(requestId: string): Promise<void> {
-    pendingApprovals.get(requestId)?.resolve(true)
+    resolveApproval(requestId, true)
   }
 
   async deny(requestId: string): Promise<void> {
-    pendingApprovals.get(requestId)?.resolve(false)
+    resolveApproval(requestId, false)
   }
 
   getCapabilities(): AgentCapabilities {
