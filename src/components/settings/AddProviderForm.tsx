@@ -15,7 +15,11 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
 }
 
 export default function AddProviderForm({ onSaved, onCancel }: AddProviderFormProps) {
-  const providerIds = Array.from(PROVIDER_REGISTRY.keys())
+  // CLI subscription providers don't take an API key — they're managed in the
+  // Subscription Sign-in section, so they're excluded from this key-entry form.
+  const providerIds = Array.from(PROVIDER_REGISTRY.keys()).filter(
+    (id) => PROVIDER_REGISTRY.get(id)?.authType !== 'cli',
+  )
   const [selectedProvider, setSelectedProvider] = useState(providerIds[0] ?? 'anthropic')
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('http://localhost:11434')

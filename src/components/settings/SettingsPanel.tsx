@@ -5,6 +5,11 @@ import { PROVIDER_REGISTRY } from '@/lib/llm/providers/index'
 import AddProviderForm from './AddProviderForm'
 import ModelList from './ModelList'
 import AddModelDialog from './AddModelDialog'
+import CliProviderRow from './CliProviderRow'
+import type { CliKind } from '@/lib/llm/cli/cli-invoke'
+
+/** Maps a CLI provider id to the CLI it drives, for the sign-in rows. */
+const CLI_KINDS: Record<string, CliKind> = { 'claude-cli': 'claude', 'codex-cli': 'codex' }
 
 type SettingsSection = 'providers' | 'models'
 
@@ -32,7 +37,11 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [modelListKey, setModelListKey] = useState(0)
 
   const loadProviderStatuses = useCallback(async () => {
-    const ids = Array.from(PROVIDER_REGISTRY.keys())
+    // CLI subscription providers carry no keychain key — they have their own
+    // sign-in section, so they're excluded from the API-key status list.
+    const ids = Array.from(PROVIDER_REGISTRY.keys()).filter(
+      (id) => PROVIDER_REGISTRY.get(id)?.authType !== 'cli',
+    )
     const statuses = await Promise.all(
       ids.map(async (id) => {
         const secret = await getSecret(id + '-key').catch(() => null)
@@ -69,6 +78,10 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     { id: 'providers', label: 'Providers' },
     { id: 'models', label: 'Models' },
   ]
+
+  const cliProviders = Array.from(PROVIDER_REGISTRY.entries())
+    .filter(([id, p]) => p.authType === 'cli' && CLI_KINDS[id])
+    .map(([id, p]) => ({ id, displayName: p.displayName, kind: CLI_KINDS[id] }))
 
   return (
     <div className="absolute inset-0 bg-[#0a0a0b] flex z-20">
@@ -151,6 +164,25 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
               >
                 Add Provider
               </button>
+            )}
+
+            {/* Subscription sign-in via the provider CLIs (no API key) */}
+            {cliProviders.length > 0 && (
+              <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-white/[0.06]">
+                  <span className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wide">
+                    Subscription Sign-in
+                  </span>
+                  <p className="text-[11px] text-zinc-500 mt-0.5 normal-case font-normal">
+                    Use your Claude or ChatGPT subscription via the official CLIs — no API key.
+                  </p>
+                </div>
+                <div className="divide-y divide-white/[0.04]">
+                  {cliProviders.map((p) => (
+                    <CliProviderRow key={p.id} displayName={p.displayName} kind={p.kind} />
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
