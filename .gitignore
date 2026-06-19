@@ -44,8 +44,9 @@ next-env.d.ts
 src-tauri/target/
 src-tauri/gen/
 
-# local tooling
-.claude/
+# local tooling — ignore everything under .claude EXCEPT the shared project skills
+.claude/*
+!.claude/skills/
 .superpowers/
 
 # playwright
