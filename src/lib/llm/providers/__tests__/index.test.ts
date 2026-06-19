@@ -13,6 +13,7 @@ describe('PROVIDER_REGISTRY', () => {
       'anthropic',
       'claude-cli',
       'codex-cli',
+      'google',
       'ollama',
       'openai',
     ])
