@@ -21,9 +21,9 @@
 | | |
 |---|---|
 | **Phase** | Phase 1 (Agent Shell) — **feature-complete, not yet hardened** |
-| **Verified baseline** | `npx vitest run` → **332 passing / 1 failing · 333 tests, 64 files** (observed 2026-06-18). ⚠️ The one failure is a **stale exhaustive assertion**: `src/lib/llm/providers/__tests__/index.test.ts:12` lists the provider keys but omits `'google'` (added to `PROVIDER_REGISTRY` without updating the test — the canonical CLAUDE.md registry-test gotcha). One-line fix: add `'google'` to the expected sorted array. |
-| **TypeScript** | Product code clean. ⚠️ `npx tsc --noEmit` reports a few errors in test files only — dynamic imports vs the `module` flag. Vitest passes regardless (own resolution). Minor config fix worth doing. |
-| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. |
+| **Verified baseline** | `npx vitest run` → **338 passing · 64 files** (observed 2026-06-19). `npx tsc --noEmit` → **clean (exit 0)**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
+| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix (below) needs a real desktop round-trip to confirm. |
 | **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
 | **Design spec** | [agent-command-center-design.md](../specs/2026-06-18-agent-command-center-design.md) |
 
@@ -79,18 +79,24 @@ These are the gaps between the shipped Phase 1 and the design spec, plus the wor
 labels Phase 2/3. Roughly ordered by leverage. **Brainstorm scope before starting any of
 these** (`superpowers:brainstorming`), then write/execute a plan.
 
+A phased plan covering the remaining work is written up at
+`C:\Users\chris\.claude\plans\i-noticed-that-when-harmonic-pearl.md` (fix no-response bug →
+attach-UI → runtime tool-call loop → built-in tool backends → MCP native bridge).
+
 ### A. Harden Phase 1 (close the gap to "actually shippable")
 1. **Verify the desktop app actually runs.** Run `npm run tauri:dev` and confirm the vault unlock,
    canvas, agent creation, and an LLM round-trip work in the real Tauri window. This is the single
    biggest unknown — everything is unit-tested but the integrated desktop binary has never been
-   launched. See [Known Risks](#known-risks).
-2. **Fix the stale provider-keys test.** `src/lib/llm/providers/__tests__/index.test.ts:12` omits
-   `'google'` from the expected key set (added without updating the exhaustive assertion). One-line
-   fix; currently the only red test in the suite.
-3. **Wire the tool-call loop.** The `ToolDefinition` registry and the six §8.2 built-in tools exist
-   (`src/lib/tools/`), but no agent runtime resolves/invokes them yet — that's the Phase-2 tool loop.
-4. **Per-agent Skills.** Spec §8.3 wants per-agent skills (`~/.acc/skills/`) surfaced through the
-   store; the store currently covers MCP servers and the built-in tool tier.
+   launched. See [Known Risks](#known-risks). **The no-response fix (Changelog 2026-06-19) needs this.**
+2. ✅ **Stale provider-keys test fixed** (`index.test.ts` now lists `'google'`) and `GoogleProvider.authType`
+   added — suite is fully green and `tsc --noEmit` is clean.
+3. **Attach tools/MCPs/skills to agents (Phase 2 of the plan).** Data columns (`tool_ids`/`mcp_ids`)
+   and the Store assign UI exist for tools/skills; **MCP assignment UI is missing**, there is no
+   agent-centric edit panel, and `AgentRepository` lacks `updateMcpIds`. See plan Phase 2.
+4. **Wire the tool-call loop (Phase 3 of the plan).** The `ToolDefinition` registry and the six §8.2
+   built-in tools exist (`src/lib/tools/`), but no agent runtime resolves/invokes them yet. Skills become
+   functional here (inject bodies into the system prompt). Built-in tool backends and a native stdio
+   MCP transport are plan Phases 4–5 (the six tools are stubs; MCP stdio can't spawn in the webview).
 
 ### B. Phase 2 — Workflow Builder (spec §3.3)
    Visual node graph for chaining agents and tools. `workflows` table is already in the schema;
@@ -125,6 +131,17 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Fixed: LLM agents showed "running" then nothing.** In AI SDK v6, `streamText`
+  surfaces failures (missing/invalid key, wrong model, network) as an `error` part in `fullStream`
+  rather than throwing; `llm-agent.ts` ignored every non-`text-delta` part, so errors were swallowed
+  (status went running→idle, blank panel). Now the run loop handles `error` parts (and wraps the body
+  in try/catch), yielding an `error` `AgentEvent`; `ChatPanel` renders it as a visible (ephemeral,
+  non-persisted) message and sets `error` status. Also fixed two latent bugs in the same loop: the
+  agent's `systemPrompt` and prior conversation history are now passed to `streamText` (previously
+  only the latest line was sent, with no system prompt). Added a friendly missing-key error in
+  `router.ts`. Drive-by: added `GoogleProvider.authType` (build-breaker once `@ai-sdk/google` resolves).
+  Verified: `npx vitest run` → **338 passing / 64 files**; `npx tsc --noEmit` clean. ⚠️ Not yet
+  confirmed on a real `tauri:dev` round-trip. (Plan: `i-noticed-that-when-harmonic-pearl.md`, Phase 1.)
 - **2026-06-18** — Documentation overhaul: rewrote `README.md` (badges, ToC, Mermaid
   architecture/event-flow/vault-unlock diagrams, accurate 6-provider + tool-registry coverage);
   added `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`; de-staled this ledger (SQLCipher, Gemini,
