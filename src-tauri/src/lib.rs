@@ -8,6 +8,7 @@ use commands::keychain::{delete_secret, get_secret, set_secret};
 use commands::vault::{vault_execute, vault_open, vault_select, VaultState};
 use commands::process::{kill_process, run_process_blocking, send_stdin, spawn_process};
 use commands::skills::{list_skills, read_skill, write_skill};
+use commands::fs::{fs_read_text, fs_write_text};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -25,6 +26,7 @@ pub fn run() {
             vault_open, vault_execute, vault_select,
             spawn_process, kill_process, send_stdin, run_process_blocking,
             list_skills, read_skill, write_skill,
+            fs_read_text, fs_write_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

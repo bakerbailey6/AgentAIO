@@ -4,7 +4,9 @@
  * @module
  */
 import type { JSONSchema, ToolContext, ToolDefinition } from '@/lib/interfaces'
-import { assertPathAllowed, notWiredYet } from './guards'
+import { assertPathAllowed } from './guards'
+import { isTauri } from '@/lib/platform'
+import { writeTextFile } from '@/lib/fs'
 
 /** Arguments accepted by {@link FileWriteTool}. */
 export interface FileWriteInput {
@@ -32,6 +34,9 @@ export class FileWriteTool implements ToolDefinition<FileWriteInput, void> {
 
   async execute(input: FileWriteInput, context: ToolContext): Promise<void> {
     assertPathAllowed(context.permissionScope, input.path)
-    throw notWiredYet(this.name)
+    if (!isTauri()) {
+      throw new Error('The file_write tool requires the desktop app (no filesystem access in web mode).')
+    }
+    await writeTextFile(input.path, input.contents, context.permissionScope.allowedPaths)
   }
 }
