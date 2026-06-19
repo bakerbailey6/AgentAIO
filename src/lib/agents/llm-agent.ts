@@ -9,14 +9,15 @@
  * @module
  */
 import { streamText, stepCountIs } from 'ai'
-import type { ModelMessage } from 'ai'
+import type { ModelMessage, Tool } from 'ai'
 import type { AgentProvider, AgentEvent, AgentSession, AgentCapabilities } from '@/lib/interfaces'
 import type { ChatMessage } from '@/lib/chat/types'
 import { LLMRouter } from '@/lib/llm/router'
 import { initDb, AgentRepository, SessionRepository } from '@/lib/storage'
 import { resolveCapabilities } from './capabilities'
-import { toAiTool } from './tool-adapter'
+import { toAiTool, toAiMcpTool, mcpToolKey } from './tool-adapter'
 import { resolveApproval, abortSessionApprovals } from './approval-gate'
+import { getMCPRegistry } from '@/lib/mcp/registry'
 
 export interface LLMAgentConfig {
   modelId: string
@@ -75,19 +76,39 @@ export class LLMAgentProvider implements AgentProvider<LLMAgentConfig, AgentEven
       // bodies are injected into the system prompt; tools are exposed to the model.
       const caps = await resolveCapabilities(agentRow)
       const system = [agentRow.systemPrompt, ...caps.skillBodies].filter(Boolean).join('\n\n')
-      const tools =
-        caps.tools.size > 0
-          ? Object.fromEntries(
-              [...caps.tools].map(([name, def]) => [
-                name,
-                toAiTool(def, {
-                  agentId: session.agentId,
-                  sessionId: session.id,
-                  permissionScope: session.permissionScope,
-                }),
-              ]),
-            )
-          : undefined
+
+      const toolEntries: Array<[string, Tool]> = [...caps.tools].map(([name, def]) => [
+        name,
+        toAiTool(def, {
+          agentId: session.agentId,
+          sessionId: session.id,
+          permissionScope: session.permissionScope,
+        }),
+      ])
+
+      // Connect the agent's assigned MCP servers and expose their tools (Phase 5),
+      // namespaced `mcp__<serverId>__<tool>` so they can't clash with built-ins.
+      // A server that fails to connect is skipped (logged), not fatal — the run
+      // proceeds with whatever connected. Connections stay warm in the registry.
+      for (const serverId of caps.mcpServerIds) {
+        try {
+          const registry = getMCPRegistry()
+          await registry.connect(serverId)
+          const mcpTools = await registry.listTools(serverId)
+          for (const t of mcpTools) {
+            toolEntries.push([
+              mcpToolKey(serverId, t.name),
+              toAiMcpTool(serverId, t.name, t.description ?? t.name, (args) =>
+                registry.callTool(serverId, t.name, args),
+              ),
+            ])
+          }
+        } catch (err) {
+          console.warn(`MCP server ${serverId} unavailable:`, stringifyError(err))
+        }
+      }
+
+      const tools = toolEntries.length > 0 ? Object.fromEntries(toolEntries) : undefined
 
       yield {
         type: 'status-change',

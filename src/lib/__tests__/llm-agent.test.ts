@@ -9,6 +9,11 @@ const {
   getAdapterMock,
   resolveCapsMock,
   toAiToolMock,
+  toAiMcpToolMock,
+  mcpToolKeyMock,
+  mcpConnect,
+  mcpListTools,
+  mcpCallTool,
   resolveApprovalMock,
   abortMock,
 } = vi.hoisted(() => ({
@@ -19,6 +24,15 @@ const {
   getAdapterMock: vi.fn(),
   resolveCapsMock: vi.fn(),
   toAiToolMock: vi.fn((def: { name: string }, _ctx?: unknown) => ({ __tool: def.name })),
+  toAiMcpToolMock: vi.fn(
+    (serverId: string, toolName: string, _description: string, _call: (a: unknown) => Promise<unknown>) => ({
+      __mcpTool: `${serverId}:${toolName}`,
+    }),
+  ),
+  mcpToolKeyMock: vi.fn((serverId: string, toolName: string) => `mcp__${serverId}__${toolName}`),
+  mcpConnect: vi.fn(async () => {}),
+  mcpListTools: vi.fn(async () => [] as Array<{ name: string; description?: string }>),
+  mcpCallTool: vi.fn(async () => ({})),
   resolveApprovalMock: vi.fn(),
   abortMock: vi.fn(),
 }))
@@ -33,10 +47,17 @@ vi.mock('@/lib/storage', () => ({
   SessionRepository: vi.fn().mockImplementation(function () { return { findById: sessionFindById } }),
 }))
 vi.mock('@/lib/agents/capabilities', () => ({ resolveCapabilities: resolveCapsMock }))
-vi.mock('@/lib/agents/tool-adapter', () => ({ toAiTool: toAiToolMock }))
+vi.mock('@/lib/agents/tool-adapter', () => ({
+  toAiTool: toAiToolMock,
+  toAiMcpTool: toAiMcpToolMock,
+  mcpToolKey: mcpToolKeyMock,
+}))
 vi.mock('@/lib/agents/approval-gate', () => ({
   resolveApproval: resolveApprovalMock,
   abortSessionApprovals: abortMock,
+}))
+vi.mock('@/lib/mcp/registry', () => ({
+  getMCPRegistry: () => ({ connect: mcpConnect, listTools: mcpListTools, callTool: mcpCallTool }),
 }))
 
 import { LLMAgentProvider } from '@/lib/agents/llm-agent'
@@ -85,6 +106,8 @@ describe('LLMAgentProvider', () => {
       mcpServerIds: [],
       warnings: [],
     })
+    mcpConnect.mockResolvedValue(undefined)
+    mcpListTools.mockResolvedValue([])
   })
 
   it('implements AgentProvider interface', () => {
@@ -263,5 +286,52 @@ describe('LLMAgentProvider', () => {
 
     await provider.stop('s1')
     expect(abortMock).toHaveBeenCalledWith('s1')
+  })
+
+  it('connects assigned MCP servers and exposes their tools (namespaced)', async () => {
+    resolveCapsMock.mockResolvedValue({
+      tools: new Map(),
+      skillBodies: [],
+      mcpServerIds: ['srv1'],
+      warnings: [],
+    })
+    mcpListTools.mockResolvedValue([{ name: 'read_file', description: 'Read a file' }])
+    streamTextMock.mockReturnValue(fakeResult([{ type: 'text-delta', text: 'ok' }]))
+    await collect(new LLMAgentProvider().run(session, 'hi'))
+
+    expect(mcpConnect).toHaveBeenCalledWith('srv1')
+    expect(mcpListTools).toHaveBeenCalledWith('srv1')
+    expect(toAiMcpToolMock).toHaveBeenCalledWith('srv1', 'read_file', 'Read a file', expect.any(Function))
+
+    const arg = streamTextMock.mock.calls[0][0] as { tools?: Record<string, unknown>; stopWhen?: unknown }
+    expect(Object.keys(arg.tools!)).toContain('mcp__srv1__read_file')
+    expect(arg.stopWhen).toBeTruthy()
+
+    // The wrapped call routes back to the registry's callTool for that server/tool.
+    const callArg = toAiMcpToolMock.mock.calls[0][3]
+    await callArg({ path: '/x' })
+    expect(mcpCallTool).toHaveBeenCalledWith('srv1', 'read_file', { path: '/x' })
+  })
+
+  it('skips an MCP server that fails to connect without aborting the run', async () => {
+    resolveCapsMock.mockResolvedValue({
+      tools: new Map(),
+      skillBodies: [],
+      mcpServerIds: ['bad'],
+      warnings: [],
+    })
+    mcpConnect.mockRejectedValue(new Error('spawn failed'))
+    streamTextMock.mockReturnValue(fakeResult([{ type: 'text-delta', text: 'ok' }]))
+    const events = await collect(new LLMAgentProvider().run(session, 'hi'))
+
+    // The failed server contributes no tools; listTools is never reached.
+    const arg = streamTextMock.mock.calls[0][0] as { tools?: unknown }
+    expect(arg.tools).toBeUndefined()
+    expect(mcpListTools).not.toHaveBeenCalled()
+    // The run still completes normally.
+    const statuses = events
+      .filter((e) => e.type === 'status-change')
+      .map((e) => (e.payload as { status: string }).status)
+    expect(statuses).toEqual(['running', 'idle'])
   })
 })

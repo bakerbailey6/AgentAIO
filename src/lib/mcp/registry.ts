@@ -9,10 +9,11 @@
  * @module
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { initDb } from '@/lib/storage'
 import { McpRepository } from '@/lib/storage/repositories/mcps'
+import { isTauri } from '@/lib/platform'
+import { TauriStdioClientTransport } from './tauri-stdio-transport'
 
 interface ConnectedServer {
   client: Client
@@ -42,8 +43,15 @@ export class MCPRegistry {
 
     let transport
     if (server.transport === 'stdio') {
+      // stdio MCP servers are spawned via the Tauri sidecar — a Node
+      // `child_process` can't run in the webview, and statically importing the
+      // SDK's Node stdio transport would pull `cross-spawn`/`child_process` into
+      // the static web bundle and break `next build`. So stdio is desktop-only.
+      if (!isTauri()) {
+        throw new Error('stdio MCP servers require the desktop app.')
+      }
       const [cmd, ...args] = server.commandOrUrl.split(' ')
-      transport = new StdioClientTransport({ command: cmd, args })
+      transport = new TauriStdioClientTransport(cmd, args)
     } else {
       transport = new SSEClientTransport(new URL(server.commandOrUrl))
     }
