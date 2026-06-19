@@ -65,6 +65,13 @@ docs/              design spec + implementation plans
   params; JSON columns are `JSON.stringify`/`parse`d; booleans stored as `0/1`.
 - Re-export each new repository (class + `*Row` type) from `src/lib/storage/index.ts`.
 - **Access pattern:** `const db = await initDb(); const repo = new XRepository(db)`.
+- **Encrypted at rest (SQLCipher).** The app DB is **not** opened via `@tauri-apps/plugin-sql` — that
+  plugin can't run `PRAGMA key` before sqlx touches the file. `initDb()` instead keys a SQLCipher
+  `rusqlite` connection (native `vault_open`/`vault_execute`/`vault_select` in
+  `src-tauri/src/commands/vault.rs`) using a passphrase from the keychain (`vault-passphrase`),
+  **before** migrations run. Repositories are unchanged — `db.select/execute` forward to the vault
+  commands. `VaultGate` (`src/components/vault/`) gates the app on unlock. Don't reintroduce
+  `Database.load` for the app DB.
 
 ## Native / Rust sidecar
 
@@ -173,10 +180,16 @@ docs/              design spec + implementation plans
 - **`cargo` is not on `PATH`** in the shell. Use the full path
   `C:\Users\chris\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin\cargo.exe` (and prepend that
   bin dir to `PATH` so build scripts find `rustc`).
+- **A complete Perl must be on `PATH` for `cargo build`** (Strawberry Perl, installed at
+  `C:\Strawberry\perl\bin`). The SQLCipher vault (`rusqlite` `bundled-sqlcipher-vendored-openssl`)
+  compiles OpenSSL from source, which needs Perl. **nasm is NOT needed** (openssl-src falls back to
+  `no-asm`). Git's bundled perl is too stripped-down (missing `Params::Check`/`IPC::Cmd`) — don't rely
+  on it. Clean builds are a few minutes slower because OpenSSL + SQLCipher compile from source.
 - **This worktree has no `node_modules`** — `npm`/`npx`/Vitest/Playwright resolve dependencies only in
   the main checkout. Install deps here first if you need to run them, or run from the main checkout.
 - **Web mode lacks all native features** — `invoke()` and `@tauri-apps/plugin-sql` reject in the
-  browser; `page.tsx` intentionally swallows the resulting `initDb` errors.
+  browser; `page.tsx` intentionally swallows the resulting `initDb` errors (the `VaultGate` renders
+  the shell directly in web mode rather than blocking on the unlock).
 
 ## Project skills
 

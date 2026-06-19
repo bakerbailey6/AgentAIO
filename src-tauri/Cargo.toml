@@ -20,6 +20,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+# Encrypted-at-rest app DB (SQLCipher). Vendored OpenSSL keeps the build self
+# contained; on Windows this needs a complete Perl on PATH (Strawberry) but NOT
+# nasm (openssl-src falls back to no-asm). See src/commands/vault.rs.
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
 keyring = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
