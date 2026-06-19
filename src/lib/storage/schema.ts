@@ -98,6 +98,31 @@ export const CREATE_CANVAS_STATE = `
   )
 `
 
+export const CREATE_WORKFLOWS = `
+  CREATE TABLE IF NOT EXISTS workflows (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    nodes TEXT NOT NULL DEFAULT '[]',
+    edges TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  )
+`
+
+export const CREATE_WORKFLOW_RUNS = `
+  CREATE TABLE IF NOT EXISTS workflow_runs (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running','done','error')),
+    input TEXT NOT NULL DEFAULT 'null',
+    result TEXT NOT NULL DEFAULT 'null',
+    node_states TEXT NOT NULL DEFAULT '{}',
+    started_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    finished_at INTEGER
+  )
+`
+
 /** Every migration, in the order they must be applied. */
 export const ALL_MIGRATIONS = [
   CREATE_AGENTS,
@@ -107,4 +132,6 @@ export const ALL_MIGRATIONS = [
   CREATE_TOOLS,
   CREATE_AUDIT_LOG,
   CREATE_CANVAS_STATE,
+  CREATE_WORKFLOWS,
+  CREATE_WORKFLOW_RUNS,
 ]
