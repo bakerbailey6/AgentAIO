@@ -62,10 +62,13 @@ describe('built-in tool permission guards', () => {
     )
   })
 
-  it('shell passes the guard but defers execution to Phase 2', async () => {
+  it('shell passes the guard, then requires the desktop app to execute', async () => {
     const shell = TOOL_REGISTRY.get('shell')!
+    // Shell is wired (Phase 4) to the native run_process_blocking backend; with
+    // the guard satisfied it reaches that backend, which only exists in the Tauri
+    // desktop shell — so in the web/test environment it reports as much.
     await expect(shell.execute({ command: 'ls' }, ctx({ shellEnabled: true }))).rejects.toThrow(
-      /Phase 2/,
+      /desktop app/i,
     )
   })
 
