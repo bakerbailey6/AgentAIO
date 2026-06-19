@@ -31,18 +31,45 @@ pub fn delete_secret(key: String) -> Result<(), String> {
     }
 }
 
+// NOTE: every test in this module talks to the real OS keychain (Windows
+// Credential Manager / macOS Keychain / libsecret). They must run on a
+// developer host with a session keychain available, NOT in headless CI.
+// Each test uses a unique key name so concurrent runs and leftover dev-state
+// can't collide.
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
+
+    fn unique_key(prefix: &str) -> String {
+        format!("acc-test-{}-{}", prefix, Uuid::new_v4())
+    }
 
     #[test]
     fn set_get_delete_round_trip() {
-        let key = "acc-test-key".to_string();
+        let key = unique_key("roundtrip");
         set_secret(key.clone(), "secret-value".to_string()).unwrap();
         let val = get_secret(key.clone()).unwrap();
         assert_eq!(val, Some("secret-value".to_string()));
         delete_secret(key.clone()).unwrap();
         let val2 = get_secret(key).unwrap();
         assert_eq!(val2, None);
+    }
+
+    #[test]
+    fn get_secret_returns_none_for_unset_key() {
+        // A key that was never set must resolve to Ok(None), not an error
+        // (the `NoEntry` arm in `get_secret`).
+        let key = unique_key("never-set");
+        let val = get_secret(key).unwrap();
+        assert_eq!(val, None);
+    }
+
+    #[test]
+    fn delete_secret_missing_key_is_idempotent() {
+        // Deleting a key that doesn't exist is a no-op, not an error
+        // (the `NoEntry` arm in `delete_secret`).
+        let key = unique_key("missing");
+        delete_secret(key).expect("deleting a missing key should be Ok(())");
     }
 }
