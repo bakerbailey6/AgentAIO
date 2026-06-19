@@ -113,6 +113,11 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-18** — Fixed broken desktop (Tauri) bundling: added `output: 'export'` to
+  `next.config.ts` so `next build` emits the `out/` directory that `tauri.conf.json`'s
+  `frontendDist: ../out` bundles (previously `next build` emitted `.next/`, so the desktop app
+  shipped no frontend). Verified `npm run build` → `out/index.html` + assets, `npm test` → 242
+  passing, and `npm run dev` still serves. Full `tauri:build` (native Rust compile) not run.
 - **2026-06-18** — Established this progress ledger. Phase 1 verified at 242 passing tests
   (48 files). No code changes; documentation only.
 - **2026-06-18** — Subscription "login" via official CLIs (Tasks 1–9): `claude-cli`/`codex-cli`

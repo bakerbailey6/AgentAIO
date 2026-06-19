@@ -10,6 +10,7 @@ interface AddProviderFormProps {
 
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
+  google: 'Google Gemini',
   openai: 'OpenAI',
   ollama: 'Ollama (local)',
 }

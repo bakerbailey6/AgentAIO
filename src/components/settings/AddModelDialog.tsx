@@ -86,6 +86,7 @@ export default function AddModelDialog({ onAdded, onCancel }: AddModelDialogProp
 
   const providerDisplayNames: Record<string, string> = {
     anthropic: 'Anthropic',
+    google: 'Google Gemini',
     openai: 'OpenAI',
     ollama: 'Ollama (local)',
   }
