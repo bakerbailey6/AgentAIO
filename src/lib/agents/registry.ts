@@ -21,3 +21,23 @@ export const AGENT_REGISTRY = new Map<string, AgentProvider>([
 export function registerAgent(provider: AgentProvider): void {
   AGENT_REGISTRY.set(provider.type, provider)
 }
+
+/**
+ * Map a persisted agent `type` to its runtime key in {@link AGENT_REGISTRY}.
+ *
+ * The `agents` table's CHECK constraint stores `'coding-agent'` / `'custom'`
+ * (the values `CreateAgentPanel` writes), but the coding-agent runtimes are
+ * registered under `'claude-code'` / `'codex'`. Without this mapping
+ * `AGENT_REGISTRY.get(agent.type)` returns `undefined` and coding agents never
+ * run. Unknown/already-correct values pass through unchanged.
+ */
+export function resolveAgentRuntimeType(storedType: string): string {
+  switch (storedType) {
+    case 'coding-agent':
+      return 'claude-code'
+    case 'custom':
+      return 'codex'
+    default:
+      return storedType
+  }
+}

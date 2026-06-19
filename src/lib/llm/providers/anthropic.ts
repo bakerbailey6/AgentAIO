@@ -17,6 +17,7 @@ export interface AnthropicModel extends BaseModel {
 export class AnthropicProvider implements LLMProvider<AnthropicModel> {
   readonly providerId = 'anthropic'
   readonly displayName = 'Anthropic'
+  readonly authType = 'api-key' as const
 
   async listModels(_credentials: Credentials): Promise<AnthropicModel[]> {
     return [

@@ -34,19 +34,25 @@ export default function AddModelDialog({ onAdded, onCancel }: AddModelDialogProp
         if (!provider) throw new Error('Provider not found')
 
         const isOllama = selectedProvider === 'ollama'
+        const isCli = provider.authType === 'cli'
         const credentials = isOllama
           ? { baseUrl: 'http://localhost:11434' }
-          : { apiKey: (await getSecret(selectedProvider + '-key')) ?? undefined }
+          : isCli
+            ? {} // CLI subscription providers need no credentials — auth is in the CLI
+            : { apiKey: (await getSecret(selectedProvider + '-key')) ?? undefined }
 
         const result = await provider.listModels(credentials)
         if (!cancelled) setModels(result)
       } catch (e) {
         if (!cancelled) {
           const isOllama = selectedProvider === 'ollama'
+          const isCli = PROVIDER_REGISTRY.get(selectedProvider)?.authType === 'cli'
           setFetchError(
             isOllama
               ? 'Ollama not running at localhost:11434'
-              : 'Could not fetch models — check your API key in Providers.',
+              : isCli
+                ? 'Could not list models — sign in under Providers.'
+                : 'Could not fetch models — check your API key in Providers.',
           )
         }
       } finally {
@@ -64,11 +70,12 @@ export default function AddModelDialog({ onAdded, onCancel }: AddModelDialogProp
       const db = await initDb()
       const repo = new ModelRepository(db)
       const isOllama = selectedProvider === 'ollama'
+      const needsKey = PROVIDER_REGISTRY.get(selectedProvider)?.authType !== 'cli' && !isOllama
       await repo.create({
         provider: selectedProvider,
         modelName: model.id,
         displayName: model.displayName,
-        apiKeyRef: isOllama ? null : selectedProvider + '-key',
+        apiKeyRef: needsKey ? selectedProvider + '-key' : null,
         baseUrl: isOllama ? 'http://localhost:11434' : null,
       })
       onAdded()
@@ -115,7 +122,7 @@ export default function AddModelDialog({ onAdded, onCancel }: AddModelDialogProp
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-indigo-500/30 transition-all text-left"
             >
               <span className="text-[13px] font-medium text-zinc-200">
-                {providerDisplayNames[id] ?? id}
+                {PROVIDER_REGISTRY.get(id)?.displayName ?? providerDisplayNames[id] ?? id}
               </span>
             </button>
           ))}

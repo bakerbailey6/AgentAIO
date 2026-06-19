@@ -19,6 +19,7 @@ vi.mock('@/lib/agents/registry', () => ({
   AGENT_REGISTRY: new Map([
     ['llm', { run: mockRun }],
   ]),
+  resolveAgentRuntimeType: (t: string) => t,
 }))
 
 vi.mock('@/lib/storage', () => ({

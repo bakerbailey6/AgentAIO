@@ -5,8 +5,8 @@
 //! (`process`). All capabilities are exposed to the front end as Tauri commands.
 mod commands;
 use commands::keychain::{delete_secret, get_secret, set_secret};
-use commands::process::{kill_process, send_stdin, spawn_process};
 use commands::vault::{vault_execute, vault_open, vault_select, VaultState};
+use commands::process::{kill_process, run_process_blocking, send_stdin, spawn_process};
 use commands::skills::{list_skills, read_skill, write_skill};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -22,8 +22,8 @@ pub fn run() {
         .manage::<VaultState>(Arc::new(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             set_secret, get_secret, delete_secret,
-            spawn_process, kill_process, send_stdin,
             vault_open, vault_execute, vault_select,
+            spawn_process, kill_process, send_stdin, run_process_blocking,
             list_skills, read_skill, write_skill,
         ])
         .run(tauri::generate_context!())
