@@ -48,6 +48,33 @@ export interface CanvasLayoutChangedEvent {
   timestamp: number
 }
 
+/** A workflow run began. */
+export interface WorkflowRunStartedEvent {
+  type: 'workflow:run-started'
+  runId: string
+  workflowId: string
+  timestamp: number
+}
+
+/** A node within a running workflow changed state. */
+export interface WorkflowNodeStatusEvent {
+  type: 'workflow:node-status'
+  runId: string
+  nodeId: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  detail?: string
+  timestamp: number
+}
+
+/** A workflow run finished (successfully or with an error). */
+export interface WorkflowRunFinishedEvent {
+  type: 'workflow:run-finished'
+  runId: string
+  status: 'done' | 'error'
+  result?: unknown
+  timestamp: number
+}
+
 /** Every event that can travel on the bus. Discriminated by `type`. */
 export type AppEvent =
   | AgentStatusChangedEvent
@@ -55,6 +82,9 @@ export type AppEvent =
   | AgentApprovalRequestedEvent
   | AgentApprovalResolvedEvent
   | CanvasLayoutChangedEvent
+  | WorkflowRunStartedEvent
+  | WorkflowNodeStatusEvent
+  | WorkflowRunFinishedEvent
 
 /** Returned by {@link EventBus.on}; call it to remove the listener. */
 export type Unsubscribe = () => void
