@@ -12,6 +12,50 @@ fn get_processes(app: &AppHandle) -> ProcessMap {
     app.state::<ProcessMap>().inner().clone()
 }
 
+/// Build and spawn the child process with all three stdio pipes attached.
+///
+/// Extracted from `spawn_process` so the command-building + spawn behavior can
+/// be unit-tested without a Tauri `AppHandle` (the event emission is the only
+/// part that genuinely needs the app handle).
+fn spawn_child(cmd: &str, args: &[String], cwd: Option<&str>) -> Result<Child, String> {
+    let mut builder = Command::new(cmd);
+    builder.args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if let Some(dir) = cwd {
+        builder.current_dir(dir);
+    }
+    builder.spawn().map_err(|e| e.to_string())
+}
+
+/// Remove a child from the map by id and kill it.
+///
+/// Returns `Err` if no process with that id is tracked. Extracted so the
+/// lookup/kill behavior is testable against a plain `ProcessMap`.
+fn kill_in_map(processes: &ProcessMap, process_id: &str) -> Result<(), String> {
+    let mut map = processes.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = map.remove(process_id) {
+        child.kill().map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err(format!("Process not found: {}", process_id))
+    }
+}
+
+/// Write bytes to a tracked child's stdin.
+///
+/// Returns `Err` if the id is unknown or the child has no stdin pipe.
+fn write_stdin_in_map(processes: &ProcessMap, process_id: &str, data: &str) -> Result<(), String> {
+    let mut map = processes.lock().map_err(|e| e.to_string())?;
+    if let Some(child) = map.get_mut(process_id) {
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())
+        } else {
+            Err(format!("No stdin for process: {}", process_id))
+        }
+    } else {
+        Err(format!("Process not found: {}", process_id))
+    }
+}
+
 #[command]
 pub fn spawn_process(
     app: AppHandle,
@@ -20,12 +64,7 @@ pub fn spawn_process(
     cwd: Option<String>,
 ) -> Result<String, String> {
     let id = Uuid::new_v4().to_string();
-    let mut builder = Command::new(&cmd);
-    builder.args(&args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if let Some(dir) = cwd {
-        builder.current_dir(dir);
-    }
-    let mut child = builder.spawn().map_err(|e| e.to_string())?;
+    let mut child = spawn_child(&cmd, &args, cwd.as_deref())?;
 
     // Spawn background threads to consume stdout/stderr and emit Tauri events.
     // Without consuming these pipes the OS pipe buffer will fill and deadlock the child.
@@ -63,28 +102,115 @@ pub fn spawn_process(
 
 #[command]
 pub fn kill_process(app: AppHandle, process_id: String) -> Result<(), String> {
-    let processes = get_processes(&app);
-    let mut map = processes.lock().map_err(|e| e.to_string())?;
-    if let Some(mut child) = map.remove(&process_id) {
-        child.kill().map_err(|e| e.to_string())?;
-    } else {
-        return Err(format!("Process not found: {}", process_id));
-    }
-    Ok(())
+    kill_in_map(&get_processes(&app), &process_id)
 }
 
 #[command]
 pub fn send_stdin(app: AppHandle, process_id: String, data: String) -> Result<(), String> {
-    let processes = get_processes(&app);
-    let mut map = processes.lock().map_err(|e| e.to_string())?;
-    if let Some(child) = map.get_mut(&process_id) {
-        if let Some(stdin) = child.stdin.as_mut() {
-            stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
-        } else {
-            return Err(format!("No stdin for process: {}", process_id));
-        }
-    } else {
-        return Err(format!("Process not found: {}", process_id));
+    write_stdin_in_map(&get_processes(&app), &process_id, &data)
+}
+
+// These tests exercise the `AppHandle`-free core of the process commands
+// (`spawn_child`, `kill_in_map`, `write_stdin_in_map`) against a plain
+// `ProcessMap`. They spawn real OS child processes, so they must run on a host
+// machine. See the finding in the WP8 summary: the `tauri::test` mock-runtime
+// path could not be used here — adding `tauri`'s `test` feature as a
+// dev-dependency produced a test binary that fails to load on this Windows
+// toolchain (STATUS_ENTRYPOINT_NOT_FOUND), so the event-emission wiring in
+// `spawn_process` (the only AppHandle-dependent part) remains uncovered.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_map() -> ProcessMap {
+        Arc::new(Mutex::new(HashMap::new()))
     }
-    Ok(())
+
+    /// A process that reads stdin and stays alive until its stdin closes,
+    /// so stdin writes and explicit kills can be tested deterministically.
+    fn stdin_reader() -> (String, Vec<String>) {
+        if cfg!(windows) {
+            // `cmd` with no `/C` runs interactively and reads from stdin.
+            ("cmd".to_string(), vec![])
+        } else {
+            ("cat".to_string(), vec![])
+        }
+    }
+
+    /// A process that prints one line and exits immediately.
+    fn quick_echo() -> (String, Vec<String>) {
+        if cfg!(windows) {
+            ("cmd".to_string(), vec!["/C".to_string(), "echo".to_string(), "hi".to_string()])
+        } else {
+            ("sh".to_string(), vec!["-c".to_string(), "echo hi".to_string()])
+        }
+    }
+
+    #[test]
+    fn spawn_child_succeeds_and_pipes_are_attached() {
+        let (cmd, args) = quick_echo();
+        let mut child = spawn_child(&cmd, &args, None).expect("spawn should succeed");
+        // All three pipes were requested via Stdio::piped().
+        assert!(child.stdin.is_some(), "stdin pipe should be attached");
+        assert!(child.stdout.is_some(), "stdout pipe should be attached");
+        assert!(child.stderr.is_some(), "stderr pipe should be attached");
+        let _ = child.wait();
+    }
+
+    #[test]
+    fn spawn_child_errors_on_missing_binary() {
+        let res = spawn_child("acc-no-such-binary-xyzzy", &[], None);
+        assert!(res.is_err(), "spawning a non-existent binary should return Err");
+    }
+
+    #[test]
+    fn spawn_child_honors_cwd() {
+        // A bogus cwd makes the spawn fail, proving cwd is applied to the builder.
+        let (cmd, args) = quick_echo();
+        let res = spawn_child(&cmd, &args, Some("acc-no-such-directory-xyzzy"));
+        assert!(res.is_err(), "spawning in a non-existent cwd should return Err");
+    }
+
+    #[test]
+    fn kill_in_map_kills_tracked_child_and_removes_it() {
+        let map = empty_map();
+        let (cmd, args) = stdin_reader();
+        let child = spawn_child(&cmd, &args, None).expect("spawn should succeed");
+        let id = "proc-1".to_string();
+        map.lock().unwrap().insert(id.clone(), child);
+
+        kill_in_map(&map, &id).expect("killing a tracked child should succeed");
+        assert!(
+            !map.lock().unwrap().contains_key(&id),
+            "killed child should be removed from the map"
+        );
+    }
+
+    #[test]
+    fn kill_in_map_errors_on_unknown_id() {
+        let map = empty_map();
+        let res = kill_in_map(&map, "unknown-id");
+        assert!(res.is_err(), "killing an unknown id should return Err");
+    }
+
+    #[test]
+    fn write_stdin_in_map_writes_to_tracked_child() {
+        let map = empty_map();
+        let (cmd, args) = stdin_reader();
+        let child = spawn_child(&cmd, &args, None).expect("spawn should succeed");
+        let id = "proc-1".to_string();
+        map.lock().unwrap().insert(id.clone(), child);
+
+        write_stdin_in_map(&map, &id, "hello\n").expect("writing to stdin should succeed");
+
+        // Clean up the still-running child.
+        kill_in_map(&map, &id).expect("cleanup kill should succeed");
+    }
+
+    #[test]
+    fn write_stdin_in_map_errors_on_unknown_id() {
+        let map = empty_map();
+        let res = write_stdin_in_map(&map, "unknown-id", "data");
+        assert!(res.is_err(), "writing stdin to an unknown id should return Err");
+    }
 }
