@@ -4,7 +4,9 @@ import { X, Send } from 'lucide-react'
 import { initDb, AgentRepository, SessionRepository } from '@/lib/storage'
 import { AGENT_REGISTRY, resolveAgentRuntimeType } from '@/lib/agents/registry'
 import { getEventBus } from '@/lib/event-bus'
-import type { AgentSession, AgentStatus } from '@/lib/interfaces'
+import { useApprovals } from '@/hooks/useApprovals'
+import { ApprovalGate } from '@/components/approval/ApprovalGate'
+import type { AgentSession, AgentStatus, AgentProvider } from '@/lib/interfaces'
 import type { ChatMessage } from '@/lib/chat/types'
 import type { AgentEvent } from '@/lib/interfaces'
 import type { Db } from '@/lib/storage'
@@ -15,6 +17,14 @@ interface ChatPanelProps {
   onClose: () => void
 }
 
+/** A live tool-call row shown (but never persisted) in the transcript. */
+interface ToolEvent {
+  id: string
+  toolName: string
+  status: 'running' | 'done' | 'error'
+  detail?: string
+}
+
 export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingContent, setStreamingContent] = useState('')
@@ -22,12 +32,22 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [agentName, setAgentName] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  // Live tool activity — kept SEPARATE from `messages` so it's never persisted
+  // to the session or replayed back to the model.
+  const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const activeRef = useRef(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   // I4: DB singleton ref — initialized once per agentId load
   const dbRef = useRef<Db | null>(null)
   // Mirror of messages state for safe reads inside async callbacks
   const messagesRef = useRef<ChatMessage[]>([])
+  // The provider for the current agent — used for run() and approve/deny.
+  const providerRef = useRef<AgentProvider | null>(null)
+
+  // Pending approval requests for THIS agent. The LLM runtime emits
+  // `agent:approval-requested` directly on the event bus, so we consume it via
+  // the shared hook and filter to the current agent.
+  const approvals = useApprovals().filter((a) => a.agentId === agentId)
 
   // Keep messagesRef in sync with messages state
   useEffect(() => {
@@ -42,6 +62,7 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
     messagesRef.current = []
     setStreamingContent('')
     setInput('')
+    setToolEvents([])
 
     async function load() {
       // I4: open DB once and store in ref
@@ -54,6 +75,9 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
       const agentRow = await agentRepo.findById(agentId!)
       if (!agentRow) return
       setAgentName(agentRow.name)
+      // Resolve the provider once for this agent so the approval gate can call
+      // approve/deny on the same instance that emitted the request.
+      providerRef.current = AGENT_REGISTRY.get(resolveAgentRuntimeType(agentRow.type)) ?? null
 
       // Load or create a session
       const sessions = await sessionRepo.findByAgentId(agentId!)
@@ -109,6 +133,8 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
 
     setIsStreaming(true)
     setStreamingContent('')
+    // Reset live tool activity at the start of each send.
+    setToolEvents([])
     // I1: do NOT re-arm activeRef here; the load useEffect owns it
 
     let persisted = false
@@ -121,6 +147,8 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
 
       const provider = AGENT_REGISTRY.get(resolveAgentRuntimeType(agentRow.type))
       if (!provider) throw new Error(`No provider for type: ${agentRow.type}`)
+      // Keep the ref in sync so the approval gate uses the same instance.
+      providerRef.current = provider
 
       const session: AgentSession = {
         id: currentSessionId,
@@ -152,6 +180,45 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
             agentId: currentAgentId,
             action: 'text',
             detail: delta,
+            timestamp: Date.now(),
+          })
+        } else if (e.type === 'tool-call') {
+          const p = e.payload as { toolCallId: string; toolName: string; input: unknown }
+          setToolEvents((prev) => [...prev, { id: p.toolCallId, toolName: p.toolName, status: 'running' }])
+          getEventBus().emit({
+            type: 'agent:action',
+            agentId: currentAgentId,
+            action: 'tool',
+            detail: p.toolName,
+            timestamp: Date.now(),
+          })
+        } else if (e.type === 'tool-result') {
+          const p = e.payload as { toolCallId?: string; toolName: string; output?: unknown; error?: string; isError?: boolean }
+          const detail = p.isError
+            ? (p.error ?? 'error')
+            : typeof p.output === 'string'
+              ? p.output
+              : p.output != null
+                ? JSON.stringify(p.output)
+                : undefined
+          const short = detail && detail.length > 120 ? `${detail.slice(0, 120)}…` : detail
+          setToolEvents((prev) => {
+            // Mark the matching call done/error; fall back to matching by name.
+            const idx = p.toolCallId
+              ? prev.findIndex((t) => t.id === p.toolCallId)
+              : prev.findIndex((t) => t.toolName === p.toolName && t.status === 'running')
+            if (idx === -1) {
+              return [...prev, { id: p.toolCallId ?? crypto.randomUUID(), toolName: p.toolName, status: p.isError ? 'error' : 'done', detail: short }]
+            }
+            const next = [...prev]
+            next[idx] = { ...next[idx], status: p.isError ? 'error' : 'done', detail: short }
+            return next
+          })
+          getEventBus().emit({
+            type: 'agent:action',
+            agentId: currentAgentId,
+            action: 'tool',
+            detail: p.toolName,
             timestamp: Date.now(),
           })
         } else if (e.type === 'status-change') {
@@ -262,6 +329,23 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
         {messages.map((msg) => (
           <ChatMessageComponent key={msg.id} message={msg} />
         ))}
+        {toolEvents.map((t) => (
+          <div
+            key={t.id}
+            className="flex justify-start mb-2"
+            data-testid="tool-event"
+          >
+            <div className="max-w-[85%] rounded-lg px-3 py-1.5 text-[11px] leading-relaxed bg-white/[0.03] text-zinc-400 border border-white/[0.06]">
+              <span className="font-medium text-zinc-300">🔧 {t.toolName}</span>
+              <span className="ml-2 text-zinc-500">
+                {t.status === 'running' ? 'running…' : t.status === 'error' ? 'error' : 'done'}
+              </span>
+              {t.detail && (
+                <span className={`ml-2 ${t.status === 'error' ? 'text-red-400/80' : 'text-zinc-600'}`}>{t.detail}</span>
+              )}
+            </div>
+          </div>
+        ))}
         {isStreaming && streamingContent && (
           <ChatMessageComponent
             message={{ id: 'streaming', role: 'assistant', content: streamingContent, timestamp: Date.now() }}
@@ -270,6 +354,20 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Pending approval gates for this agent (emitted directly on the bus) */}
+      {approvals.length > 0 && (
+        <div className="shrink-0 pt-2 border-t border-white/[0.06]">
+          {approvals.map((a) => (
+            <ApprovalGate
+              key={a.id}
+              request={a}
+              onApprove={(id) => providerRef.current?.approve(id)}
+              onDeny={(id) => providerRef.current?.deny(id)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Input */}
       <div className="px-4 py-3 border-t border-white/[0.06] shrink-0">
