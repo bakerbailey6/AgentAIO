@@ -8,6 +8,7 @@ import { AgentCanvas } from '@/components/canvas/AgentCanvas'
 import { StorePanel } from '@/components/store/StorePanel'
 import SettingsPanel from '@/components/settings/SettingsPanel'
 import CreateAgentPanel from '@/components/agents/CreateAgentPanel'
+import EditAgentPanel from '@/components/agents/EditAgentPanel'
 import ChatPanel from '@/components/chat/ChatPanel'
 import { VaultGate } from '@/components/vault/VaultGate'
 import { useApprovals } from '@/hooks/useApprovals'
@@ -21,6 +22,7 @@ export default function Home() {
   const [showCreateAgent, setShowCreateAgent] = useState(false)
   const [agents, setAgents] = useState<AgentRow[]>([])
   const [chatAgentId, setChatAgentId] = useState<string | null>(null)
+  const [editAgentId, setEditAgentId] = useState<string | null>(null)
   const approvals = useApprovals()
   const { running, idle } = useAgentCounts()
   const [modelsConnected, setModelsConnected] = useState(0)
@@ -28,6 +30,8 @@ export default function Home() {
   const handleOpenChat = useCallback((agentId: string) => {
     setChatAgentId(agentId)
   }, [])
+
+  const handleEditAgent = useCallback((agentId: string) => setEditAgentId(agentId), [])
 
   useEffect(() => {
     initDb()
@@ -53,6 +57,7 @@ export default function Home() {
           <AgentCanvas
             agents={agents}
             onOpenChat={handleOpenChat}
+            onEdit={handleEditAgent}
           />
           {activeNav === 'store' && <StorePanel onClose={() => setActiveNav('home')} />}
           {activeNav === 'settings' && <SettingsPanel onClose={() => setActiveNav('home')} />}
@@ -65,6 +70,10 @@ export default function Home() {
             }}
           />
           <ChatPanel agentId={chatAgentId} onClose={() => setChatAgentId(null)} />
+          {editAgentId && (
+            <EditAgentPanel agentId={editAgentId} onClose={() => setEditAgentId(null)}
+              onSaved={(row) => setAgents((prev) => prev.map((a) => (a.id === row.id ? row : a)))} />
+          )}
         </div>
         <StatusBar
           runningCount={running}

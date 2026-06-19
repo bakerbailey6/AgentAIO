@@ -24,9 +24,10 @@ interface AgentCardProps {
   onApprove: (requestId: string) => void
   onDeny: (requestId: string) => void
   onOpen: () => void
+  onEdit?: () => void
 }
 
-export function AgentCard({ agentId, name, icon, modelName, toolCount, actions, pendingApprovals = [], onApprove, onDeny, onOpen }: AgentCardProps) {
+export function AgentCard({ agentId, name, icon, modelName, toolCount, actions, pendingApprovals = [], onApprove, onDeny, onOpen, onEdit }: AgentCardProps) {
   const status = useAgentStatus(agentId)
   const style = STATUS_STYLES[status]
 
@@ -46,6 +47,15 @@ export function AgentCard({ agentId, name, icon, modelName, toolCount, actions, 
           <p className="text-[10px] text-zinc-500 mt-0.5">{modelName} · {toolCount} tools</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+          <button
+            type="button"
+            aria-label="Edit agent"
+            className="text-zinc-500 hover:text-zinc-300 text-[12px] leading-none px-1 -mr-1 transition-colors"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onEdit?.() }}
+          >
+            ✎
+          </button>
           <span className={cn('w-2 h-2 rounded-full shrink-0', style.dot, style.dotExtra)} />
           <span className={cn('text-[9px] font-semibold tracking-wide uppercase', style.labelColor)}>{style.label}</span>
         </div>

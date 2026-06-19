@@ -21,7 +21,7 @@
 | | |
 |---|---|
 | **Phase** | Phase 1 (Agent Shell) — **feature-complete, not yet hardened** |
-| **Verified baseline** | `npx vitest run` → **338 passing · 64 files** (observed 2026-06-19). `npx tsc --noEmit` → **clean (exit 0)**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **Verified baseline** | `npx vitest run` → **353 passing · 65 files** (observed 2026-06-19, post Phase-2). `npx tsc --noEmit` → **clean (exit 0)**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
 | **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix (below) needs a real desktop round-trip to confirm. |
 | **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
@@ -90,9 +90,10 @@ attach-UI → runtime tool-call loop → built-in tool backends → MCP native b
    launched. See [Known Risks](#known-risks). **The no-response fix (Changelog 2026-06-19) needs this.**
 2. ✅ **Stale provider-keys test fixed** (`index.test.ts` now lists `'google'`) and `GoogleProvider.authType`
    added — suite is fully green and `tsc --noEmit` is clean.
-3. **Attach tools/MCPs/skills to agents (Phase 2 of the plan).** Data columns (`tool_ids`/`mcp_ids`)
-   and the Store assign UI exist for tools/skills; **MCP assignment UI is missing**, there is no
-   agent-centric edit panel, and `AgentRepository` lacks `updateMcpIds`. See plan Phase 2.
+3. ✅ **Attach tools/MCPs/skills to agents (Phase 2 of the plan) — DONE** (Changelog 2026-06-19). MCP→agent
+   assignment in the Store, a new `EditAgentPanel` (edit name/model/prompt + multi-select tools/MCPs/skills),
+   `AgentRepository.updateMcpIds`/`update`, kind-aware `useAgentAssignments`, and an edit affordance on the
+   agent card. ⚠️ Assignments are stored but **not yet consumed at runtime** — that's item 4.
 4. **Wire the tool-call loop (Phase 3 of the plan).** The `ToolDefinition` registry and the six §8.2
    built-in tools exist (`src/lib/tools/`), but no agent runtime resolves/invokes them yet. Skills become
    functional here (inject bodies into the system prompt). Built-in tool backends and a native stdio
@@ -131,6 +132,15 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Phase 2 landed: attach tools/MCPs/skills to agents** (built by 4 parallel worktree
+  agents, integrated via cherry-pick A→C→B→D). Added `AgentRepository.updateMcpIds`/`update`; made
+  `useAgentAssignments` kind-aware (tool vs mcp); added `useInstalledMcps.installedId`; wired MCP→agent
+  assignment into the Store; new `EditAgentPanel` (edit name/model/system-prompt + multi-select
+  tools/MCPs/skills, persisting via the repo); added an edit affordance on the agent card threaded
+  through the canvas to `page.tsx`. Disjoint file ownership + locked contracts → conflict-free merge.
+  Verified: `npx tsc --noEmit` clean, `npx vitest run` → **353 passing / 65 files**, no new lint, the
+  four exhaustive registry tests untouched. ⚠️ Assignments are stored but **not consumed at runtime yet**
+  (that's the Phase-3 tool-call loop). (Plan: `i-noticed-that-when-harmonic-pearl.md`.)
 - **2026-06-19** — **Fixed: LLM agents showed "running" then nothing.** In AI SDK v6, `streamText`
   surfaces failures (missing/invalid key, wrong model, network) as an `error` part in `fullStream`
   rather than throwing; `llm-agent.ts` ignored every non-`text-delta` part, so errors were swallowed

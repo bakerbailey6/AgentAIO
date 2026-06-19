@@ -130,21 +130,33 @@ export function StorePanel({ onClose }: StorePanelProps) {
       {/* Items list */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'mcps' && (
-          MCP_CATALOG.filter((e) => matches(e.name, e.description)).map((entry) => (
-            <StoreItemRow
-              key={entry.name}
-              name={entry.name}
-              version={entry.version}
-              description={entry.description}
-              installed={mcpStore.isInstalled(entry.name)}
-              installing={installingName === entry.name}
-              onInstall={() => handleMcpInstall(entry)}
-              onUninstall={() => {
-                const row = mcpStore.mcps.find((m) => m.name === entry.name)
-                if (row) mcpStore.uninstall(row.id)
-              }}
-            />
-          ))
+          MCP_CATALOG.filter((e) => matches(e.name, e.description)).map((entry) => {
+            const installed = mcpStore.isInstalled(entry.name)
+            const rowId = mcpStore.installedId(entry.name)
+            return (
+              <StoreItemRow
+                key={entry.name}
+                name={entry.name}
+                version={entry.version}
+                description={entry.description}
+                installed={installed}
+                installing={installingName === entry.name}
+                onInstall={() => handleMcpInstall(entry)}
+                onUninstall={() => {
+                  const row = mcpStore.mcps.find((m) => m.name === entry.name)
+                  if (row) mcpStore.uninstall(row.id)
+                }}
+                agents={installed ? agentList : undefined}
+                assignedAgents={rowId ? assignments.assignedAgentNames(rowId, 'mcp') : []}
+                assignedAgentIds={rowId ? assignments.assignedAgentIds(rowId, 'mcp') : []}
+                onToggleAgent={
+                  installed && rowId
+                    ? (agentId, next) => assignments.toggle(rowId, agentId, next, 'mcp')
+                    : undefined
+                }
+              />
+            )
+          })
         )}
 
         {activeTab === 'tools' && (

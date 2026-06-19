@@ -9,6 +9,7 @@ const {
   mockInstall,
   mockUninstall,
   mockIsInstalled,
+  mockMcpInstalledId,
   mockToolInstall,
   mockToolUninstall,
   mockToolIsInstalled,
@@ -21,6 +22,7 @@ const {
   mockInstall: vi.fn(),
   mockUninstall: vi.fn(),
   mockIsInstalled: vi.fn(),
+  mockMcpInstalledId: vi.fn(),
   mockToolInstall: vi.fn(),
   mockToolUninstall: vi.fn(),
   mockToolIsInstalled: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/hooks/useInstalledMcps', () => ({
     install: mockInstall,
     uninstall: mockUninstall,
     isInstalled: mockIsInstalled,
+    installedId: mockMcpInstalledId,
   }),
 }))
 vi.mock('@/hooks/useInstalledTools', () => ({
@@ -81,6 +84,7 @@ describe('StorePanel', () => {
     mockInstall.mockResolvedValue(undefined)
     mockUninstall.mockResolvedValue(undefined)
     mockIsInstalled.mockReturnValue(false)
+    mockMcpInstalledId.mockReturnValue(undefined)
     mockToolInstall.mockResolvedValue('tool-row-1')
     mockToolUninstall.mockResolvedValue(undefined)
     mockToolIsInstalled.mockReturnValue(false)
@@ -112,6 +116,20 @@ describe('StorePanel', () => {
     render(<StorePanel onClose={onClose} />)
     fireEvent.click(screen.getByText('Remove'))
     expect(mockUninstall).toHaveBeenCalledWith('row-1')
+  })
+
+  it('assigns an installed MCP server to an agent via mcp_ids', () => {
+    // First catalog entry reads as installed with a known row id.
+    const firstName = MCP_CATALOG[0].name
+    mockIsInstalled.mockImplementation((name: string) => name === firstName)
+    mockMcpInstalledId.mockImplementation((name: string) => (name === firstName ? 'mcp-row-1' : undefined))
+    agentsFixture = [{ id: 'agent-1', name: 'Researcher', toolIds: [] }]
+
+    render(<StorePanel onClose={onClose} />)
+    fireEvent.click(screen.getByText('Assign ▾'))
+    fireEvent.click(screen.getByLabelText('Researcher'))
+
+    expect(mockToggle).toHaveBeenCalledWith('mcp-row-1', 'agent-1', true, 'mcp')
   })
 
   // --- Tools tab ---

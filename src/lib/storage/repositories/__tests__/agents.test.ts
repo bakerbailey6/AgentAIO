@@ -37,6 +37,48 @@ describe('AgentRepository', () => {
     )
   })
 
+  it('updateMcpIds issues an UPDATE that JSON-encodes the ids', async () => {
+    const repo = makeRepo()
+    await repo.updateMcpIds('agent-1', ['mcp-a', 'mcp-b'])
+    expect(mockDb.execute).toHaveBeenCalledWith(
+      'UPDATE agents SET mcp_ids = $1 WHERE id = $2',
+      [JSON.stringify(['mcp-a', 'mcp-b']), 'agent-1'],
+    )
+  })
+
+  it('update issues a single-column UPDATE for a name-only patch', async () => {
+    const repo = makeRepo()
+    await repo.update('agent-1', { name: 'Renamed' })
+    expect(mockDb.execute).toHaveBeenCalledWith(
+      'UPDATE agents SET name = $1 WHERE id = $2',
+      ['Renamed', 'agent-1'],
+    )
+  })
+
+  it('update builds SET clauses in fixed column order for a full patch', async () => {
+    const repo = makeRepo()
+    await repo.update('agent-1', { name: 'X', modelId: 'm1', systemPrompt: 'Y' })
+    expect(mockDb.execute).toHaveBeenCalledWith(
+      'UPDATE agents SET name = $1, model_id = $2, system_prompt = $3 WHERE id = $4',
+      ['X', 'm1', 'Y', 'agent-1'],
+    )
+  })
+
+  it('update includes model_id even when it is null', async () => {
+    const repo = makeRepo()
+    await repo.update('agent-1', { modelId: null })
+    expect(mockDb.execute).toHaveBeenCalledWith(
+      'UPDATE agents SET model_id = $1 WHERE id = $2',
+      [null, 'agent-1'],
+    )
+  })
+
+  it('update issues no SQL for an empty patch', async () => {
+    const repo = makeRepo()
+    await repo.update('agent-1', {})
+    expect(mockDb.execute).not.toHaveBeenCalled()
+  })
+
   it('findAll maps snake_case → camelCase and parses tool_ids / mcp_ids', async () => {
     mockDb.select.mockResolvedValueOnce([
       {
