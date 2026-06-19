@@ -4,7 +4,7 @@
  * @module
  */
 import type { JSONSchema, ToolContext, ToolDefinition } from '@/lib/interfaces'
-import { assertDomainAllowed, notWiredYet } from './guards'
+import { assertDomainAllowed } from './guards'
 
 /** Arguments accepted by {@link BrowserTool}. */
 export interface BrowserInput {
@@ -41,6 +41,8 @@ export class BrowserTool implements ToolDefinition<BrowserInput, BrowserResult> 
 
   async execute(input: BrowserInput, context: ToolContext): Promise<BrowserResult> {
     assertDomainAllowed(context.permissionScope, input.url)
-    throw notWiredYet(this.name)
+    throw new Error(
+      'browser is not available yet — it needs a browser automation backend configured in Settings.',
+    )
   }
 }

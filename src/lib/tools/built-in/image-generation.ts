@@ -4,7 +4,6 @@
  * @module
  */
 import type { JSONSchema, ToolContext, ToolDefinition } from '@/lib/interfaces'
-import { notWiredYet } from './guards'
 
 /** Arguments accepted by {@link ImageGenerationTool}. */
 export interface ImageGenerationInput {
@@ -44,6 +43,8 @@ export class ImageGenerationTool
   ): Promise<ImageGenerationResult> {
     void input
     void context
-    throw notWiredYet(this.name)
+    throw new Error(
+      'image_generation is not available yet — it needs an image provider/API key configured in Settings.',
+    )
   }
 }
