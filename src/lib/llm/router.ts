@@ -33,7 +33,15 @@ export class LLMRouter {
     const provider = PROVIDER_REGISTRY.get(model.provider)
     if (!provider) throw new Error(`Provider not registered: ${model.provider}`)
 
-    const apiKey = model.apiKeyRef ? await getSecret(model.apiKeyRef) ?? undefined : undefined
+    let apiKey: string | undefined
+    if (model.apiKeyRef) {
+      apiKey = (await getSecret(model.apiKeyRef)) ?? undefined
+      // A model that references a keychain key but has none stored is a
+      // misconfiguration — surface it now rather than as an opaque 401 later.
+      if (!apiKey) {
+        throw new Error(`API key for "${model.provider}" not found — re-add it in Settings.`)
+      }
+    }
     const credentials = { apiKey, baseUrl: model.baseUrl ?? undefined }
 
     return provider.createAdapter(

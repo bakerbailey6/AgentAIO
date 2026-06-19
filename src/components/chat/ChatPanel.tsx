@@ -112,6 +112,7 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
     // I1: do NOT re-arm activeRef here; the load useEffect owns it
 
     let persisted = false
+    let errored = false
 
     try {
       const agentRepo = new AgentRepository(db)
@@ -159,6 +160,20 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
         } else if (e.type === 'approval-request') {
           const req = e.payload as import('@/lib/interfaces').ApprovalRequest
           getEventBus().emit({ type: 'agent:approval-requested', request: req, timestamp: Date.now() })
+        } else if (e.type === 'error') {
+          // The run failed (e.g. missing/invalid API key, wrong model). Show it
+          // in the transcript as an ephemeral (non-persisted) message so the
+          // user sees what happened instead of a silent "running → idle".
+          errored = true
+          const message = (e.payload as { message?: string }).message ?? 'Unknown error'
+          const errMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: `Error: ${message}`,
+            timestamp: Date.now(),
+            ephemeral: true,
+          }
+          setMessages((prev) => [...prev, errMsg])
         }
       }
 
@@ -177,31 +192,43 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
         setMessages(allMessages)
         messagesRef.current = allMessages
         const sessionRepo = new SessionRepository(db)
-        await sessionRepo.updateMessages(currentSessionId, allMessages)
+        // Strip ephemeral (error/notice) messages so they don't get replayed.
+        await sessionRepo.updateMessages(currentSessionId, allMessages.filter((m) => !m.ephemeral))
         persisted = true
+      } else if (!errored && activeRef.current) {
+        // Stream finished with no text and no error — make the empty result
+        // visible rather than leaving the panel blank.
+        const notice: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'No response received.',
+          timestamp: Date.now(),
+          ephemeral: true,
+        }
+        setMessages((prev) => [...prev, notice])
       }
     } catch (err) {
+      errored = true
       const errMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: `Error: ${err instanceof Error ? err.message : String(err)}`,
         timestamp: Date.now(),
+        ephemeral: true,
       }
       setMessages(prev => [...prev, errMsg])
     } finally {
       setIsStreaming(false)
       setStreamingContent('')
       // I3: use captured currentAgentId — no non-null assertion needed
-      getEventBus().emit({ type: 'agent:status-changed', agentId: currentAgentId, status: 'idle', timestamp: Date.now() })
+      getEventBus().emit({ type: 'agent:status-changed', agentId: currentAgentId, status: errored ? 'error' : 'idle', timestamp: Date.now() })
 
-      // I2: always persist at least the user message (best-effort)
+      // I2: always persist at least the user message (best-effort). Ephemeral
+      // error/notice messages are stripped so the replayed history stays clean.
       if (!persisted) {
         try {
           const sessionRepo = new SessionRepository(db)
-          // messagesRef.current has the most up-to-date list (may include
-          // assistant reply if the success path ran); messagesAtSend is the
-          // floor — the user message is always present in either.
-          await sessionRepo.updateMessages(currentSessionId, messagesRef.current)
+          await sessionRepo.updateMessages(currentSessionId, messagesRef.current.filter((m) => !m.ephemeral))
         } catch { /* best-effort */ }
       }
     }

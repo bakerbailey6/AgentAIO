@@ -17,6 +17,7 @@ export interface GoogleModel extends BaseModel {
 export class GoogleProvider implements LLMProvider<GoogleModel> {
   readonly providerId = 'google'
   readonly displayName = 'Google Gemini'
+  readonly authType = 'api-key' as const
 
   async listModels(_credentials: Credentials): Promise<GoogleModel[]> {
     return [

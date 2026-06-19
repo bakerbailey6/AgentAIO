@@ -5,7 +5,7 @@ import type { ChatMessage } from '@/lib/chat/types'
 
 const { mockRun, mockDb } = vi.hoisted(() => {
   const mockDb = { execute: vi.fn(async () => ({ rowsAffected: 1 })), select: vi.fn(async () => []) }
-  const mockRun = vi.fn(async function* () {
+  const mockRun = vi.fn(async function* (): AsyncGenerator<import('@/lib/interfaces').AgentEvent> {
     yield { type: 'text-delta', agentId: 'a1', timestamp: Date.now(), payload: { delta: 'Hello!' } }
     yield { type: 'status-change', agentId: 'a1', timestamp: Date.now(), payload: { status: 'idle' } }
   })
@@ -70,6 +70,18 @@ describe('ChatPanel', () => {
     fireEvent.change(screen.getByPlaceholderText(/send a message/i), { target: { value: 'Hello' } })
     fireEvent.click(screen.getByLabelText('Send'))
     await waitFor(() => expect(mockRun).toHaveBeenCalled())
+  })
+
+  it('shows a visible error message when the run yields an error event', async () => {
+    mockRun.mockImplementationOnce(async function* (): AsyncGenerator<import('@/lib/interfaces').AgentEvent> {
+      yield { type: 'error', agentId: 'a1', timestamp: Date.now(), payload: { message: 'API key for "anthropic" not found — re-add it in Settings.' } }
+      yield { type: 'status-change', agentId: 'a1', timestamp: Date.now(), payload: { status: 'error' } }
+    })
+    render(<ChatPanel agentId="a1" onClose={onClose} />)
+    await waitFor(() => screen.getByPlaceholderText(/send a message/i))
+    fireEvent.change(screen.getByPlaceholderText(/send a message/i), { target: { value: 'Hello' } })
+    fireEvent.click(screen.getByLabelText('Send'))
+    await waitFor(() => expect(screen.getByText(/Error: API key for "anthropic" not found/i)).toBeDefined())
   })
 
   it('calls onClose when X is clicked', async () => {
