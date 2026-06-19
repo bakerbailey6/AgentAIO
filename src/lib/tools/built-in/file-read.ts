@@ -4,7 +4,9 @@
  * @module
  */
 import type { JSONSchema, ToolContext, ToolDefinition } from '@/lib/interfaces'
-import { assertPathAllowed, notWiredYet } from './guards'
+import { assertPathAllowed } from './guards'
+import { isTauri } from '@/lib/platform'
+import { readTextFile } from '@/lib/fs'
 
 /** Arguments accepted by {@link FileReadTool}. */
 export interface FileReadInput {
@@ -29,6 +31,9 @@ export class FileReadTool implements ToolDefinition<FileReadInput, string> {
 
   async execute(input: FileReadInput, context: ToolContext): Promise<string> {
     assertPathAllowed(context.permissionScope, input.path)
-    throw notWiredYet(this.name)
+    if (!isTauri()) {
+      throw new Error('The file_read tool requires the desktop app (no filesystem access in web mode).')
+    }
+    return readTextFile(input.path, context.permissionScope.allowedPaths)
   }
 }

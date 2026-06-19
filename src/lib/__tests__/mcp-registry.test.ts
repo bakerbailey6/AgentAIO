@@ -10,8 +10,12 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
     }
   }),
 }))
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: vi.fn().mockImplementation(function () { return {} }),
+// Phase 5: stdio MCP servers connect via the Tauri sidecar transport in the
+// desktop shell (the SDK's Node stdio transport is no longer bundled). Force the
+// desktop path and stub the Tauri transport so connect() resolves.
+vi.mock('@/lib/platform', () => ({ isTauri: () => true }))
+vi.mock('@/lib/mcp/tauri-stdio-transport', () => ({
+  TauriStdioClientTransport: vi.fn().mockImplementation(function () { return {} }),
 }))
 vi.mock('@/lib/storage', () => ({
   initDb: vi.fn(async () => ({

@@ -3,24 +3,13 @@
  *
  * Every {@link ToolDefinition.execute} runs inside a {@link ToolContext} that
  * carries the agent's {@link PermissionScope} (§9.3 — zero-trust agents). These
- * helpers enforce that boundary *before* a tool would touch the OS or network.
- *
- * The execution backend itself (spawning processes, reading files, calling out
- * to a search API) is wired by the Phase 2 tool-call loop; until then a tool
- * that passes its permission check throws {@link notWiredYet} rather than
- * silently doing nothing. Implementing `execute` is in scope; *invoking* it from
- * an agent is not.
+ * helpers enforce that boundary *before* a tool touches the OS or network; the
+ * built-in tools call their real backends (filesystem/process via the Tauri
+ * sidecar, external APIs) only after the relevant guard passes.
  *
  * @module
  */
 import type { PermissionScope } from '@/lib/interfaces'
-
-/** Thrown when a tool's effect is gated behind the Phase 2 execution loop. */
-export function notWiredYet(toolName: string): Error {
-  return new Error(
-    `Tool "${toolName}" cannot run yet: the agent tool-call execution loop lands in Phase 2.`,
-  )
-}
 
 /** Reject unless the agent's scope opts into shell access. */
 export function assertShellAllowed(scope: PermissionScope): void {

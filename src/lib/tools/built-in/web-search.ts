@@ -4,7 +4,7 @@
  * @module
  */
 import type { JSONSchema, ToolContext, ToolDefinition } from '@/lib/interfaces'
-import { assertDomainAllowed, notWiredYet } from './guards'
+import { assertDomainAllowed } from './guards'
 
 /** Arguments accepted by {@link WebSearchTool}. */
 export interface WebSearchInput {
@@ -41,6 +41,8 @@ export class WebSearchTool implements ToolDefinition<WebSearchInput, WebSearchRe
     // A search engine is a remote host — honor the agent's domain allow-list.
     assertDomainAllowed(context.permissionScope, 'https://duckduckgo.com')
     void input
-    throw notWiredYet(this.name)
+    throw new Error(
+      'web_search is not available yet — it needs a search provider/API key configured in Settings.',
+    )
   }
 }

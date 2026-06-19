@@ -3,3 +3,4 @@ pub mod keychain;
 pub mod process;
 pub mod vault;
 pub mod skills;
+pub mod fs;

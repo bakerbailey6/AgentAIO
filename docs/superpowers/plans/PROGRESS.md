@@ -20,11 +20,11 @@
 
 | | |
 |---|---|
-| **Phase** | Phase 1 (Agent Shell) — **feature-complete, not yet hardened** |
-| **Verified baseline** | `npx vitest run` → **353 passing · 65 files** (observed 2026-06-19, post Phase-2). `npx tsc --noEmit` → **clean (exit 0)**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **Phase** | Phase 5 (MCP servers connect) landed — native Tauri stdio transport + assigned MCP tools routed through the agent loop; SSE works in-renderer. Only the two spec phases remain: Workflow Builder (S2) + Autonomous Executor (S3), each needing a design pass |
+| **Verified baseline** | `npx vitest run` → **411 passing · 76 files** (observed 2026-06-19, post Phase-5; run from the worktree, not the main checkout). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`) — stdio MCP deliberately kept out of the web bundle. Web-mode Playwright e2e → **4/4 pass**. `cargo test` (src-tauri) → **32 passing** (unchanged; Phase 5 added no Rust). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
-| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix (below) needs a real desktop round-trip to confirm. |
-| **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
+| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix and the Phase 3–4 runtime (tool calls, real file/shell execution, approval round-trips) all need a real desktop round-trip to confirm. |
+| **Rust tests** | ✅ `cargo test` (src-tauri) green — **32 passing** (AppHandle-free helpers, incl. the new `fs.rs` path-guard tests). MockRuntime command-level tests stay behind the `mock-runtime-tests` feature (off on this host). |
 | **Design spec** | [agent-command-center-design.md](../specs/2026-06-18-agent-command-center-design.md) |
 
 ---
@@ -94,10 +94,30 @@ attach-UI → runtime tool-call loop → built-in tool backends → MCP native b
    assignment in the Store, a new `EditAgentPanel` (edit name/model/prompt + multi-select tools/MCPs/skills),
    `AgentRepository.updateMcpIds`/`update`, kind-aware `useAgentAssignments`, and an edit affordance on the
    agent card. ⚠️ Assignments are stored but **not yet consumed at runtime** — that's item 4.
-4. **Wire the tool-call loop (Phase 3 of the plan).** The `ToolDefinition` registry and the six §8.2
-   built-in tools exist (`src/lib/tools/`), but no agent runtime resolves/invokes them yet. Skills become
-   functional here (inject bodies into the system prompt). Built-in tool backends and a native stdio
-   MCP transport are plan Phases 4–5 (the six tools are stubs; MCP stdio can't spawn in the webview).
+4. ✅ **Wire the tool-call loop (Phase 3 of the plan) — DONE** (Changelog 2026-06-19). The LLM runtime now
+   resolves an agent's assigned tools/skills and runs a bounded multi-step tool-call loop: `resolveCapabilities`
+   (`src/lib/agents/capabilities.ts`) maps `toolIds` → `TOOL_REGISTRY` executables and loads `skill:` bodies;
+   `toAiTool` (`src/lib/agents/tool-adapter.ts`) wraps each `ToolDefinition` as a v6 `tool()` behind an approval
+   gate; `llm-agent.ts` injects skill bodies into the system prompt, passes `tools` + `stopWhen: stepCountIs(8)`,
+   and emits `tool-call`/`tool-result` events; a promise-based `approval-gate.ts` + inline `ApprovalGate` in
+   `ChatPanel` gate dangerous tools (`shell`/`file_write`). ✅ As of Phase 4 the file/shell tools have real
+   backends; assigned MCP servers stay dormant until Phase 5 (stdio transport).
+
+### Remaining work (post-Phase-4)
+- ✅ **Phase 4 — built-in tool backends — DONE** (Changelog 2026-06-19). `file_read`/`file_write` via a new
+  `src-tauri/src/commands/fs.rs` (+ `src/lib/fs.ts` bridge, with a lexically-normalized allow-list re-check on
+  the Rust side); `shell` via the existing `run_process_blocking`; `web_search`/`browser`/`image_generation`
+  now throw clear "needs configuration in Settings" errors. The dead `notWiredYet` helper was retired.
+  ⚠️ Real file/shell execution is desktop-only (web `invoke` rejects) — verified by `cargo test` (32 passing,
+  incl. 7 `fs::` path-guard tests) + unit tests; a live round-trip still needs `tauri:dev`.
+- ✅ **Phase 5 — MCP servers connect — DONE** (Changelog 2026-06-19). New `src/lib/mcp/tauri-stdio-transport.ts`
+  frames MCP JSON-RPC over `spawn_process`/`send_stdin`/stdout-events; `registry.ts` uses it for stdio when
+  `isTauri()` (stdio is otherwise rejected, and the SDK's Node stdio transport is no longer bundled — that kept
+  `next build` green); `llm-agent` connects assigned `mcpServerIds`, lists their tools, and exposes them as
+  `mcp__<serverId>__<tool>` via `toAiMcpTool`, skipping any server that fails to connect. ⚠️ stdio MCP is
+  desktop-only; SSE works in-renderer; a live MCP round-trip needs `tauri:dev`.
+- **Workflow Builder (spec §3.3)** and **Autonomous Executor (spec §3.3)** — the last two roadmap items.
+  Each needs its own design pass (brainstorming + plan) before decomposition; see below.
 
 ### B. Phase 2 — Workflow Builder (spec §3.3)
    Visual node graph for chaining agents and tools. `workflows` table is already in the schema;
@@ -132,6 +152,53 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Phase 5 landed: MCP servers connect** (implemented solo in the integration worktree —
+  the parallel-agent model was thrashing the shared `node_modules` via competing installs, so a single-writer
+  pass was safer; adversarially Tier-1 QA'd after). New `src/lib/mcp/tauri-stdio-transport.ts`: an MCP
+  `Transport` that frames newline-delimited JSON-RPC over the existing `spawn_process` (stdout already emitted
+  line-by-line) + `send_stdin` + `kill_process`. `registry.ts` selects it for stdio when `isTauri()` and
+  **drops the static `StdioClientTransport` import** — once `llm-agent` reached the registry, that Node import
+  pulled `cross-spawn`/`child_process` into the static web bundle and broke `next build`; stdio is now
+  desktop-only (rejected in web), SSE stays (browser-safe). `llm-agent.run` connects each assigned
+  `mcpServerId`, lists its tools, and exposes them as `mcp__<serverId>__<tool>` via `toAiMcpTool` →
+  `registry.callTool`, skipping (logging, not aborting) any server that fails to connect. Verified:
+  `npx tsc --noEmit` clean; `npx vitest run` → **411 passing / 76 files** (+8); `eslint` no new errors;
+  **`npm run build` green** (`out/` emitted — static export preserved); `cargo` unchanged (no Rust). Only
+  `mcp-registry.test.ts` changed among the registry tests (behavioral: stdio now via the Tauri transport;
+  connect/disconnect assertions preserved) — the node/agents/tools key-list tests are untouched. ⚠️ A live MCP
+  round-trip (spawning a real `npx @modelcontextprotocol/server-*`) needs `tauri:dev`. (Plan:
+  `i-noticed-that-when-harmonic-pearl.md`, Phase 5.)
+- **2026-06-19** — **Phase 4 landed: native built-in tool backends** (3 parallel tasks: 2 worktree agents for
+  the JS-only tools + the Rust filesystem backend done in the integration worktree; each Tier-1 adversarially
+  QA'd). `file_read`/`file_write` now read/write via a new `src-tauri/src/commands/fs.rs`
+  (`fs_read_text`/`fs_write_text`, registered in `mod.rs` + `lib.rs`) through a new `src/lib/fs.ts` bridge; the
+  Rust side re-checks the path against the agent's `allowedPaths` with a **lexically-normalized, component-wise
+  containment check** (defeats `..` traversal and sibling-prefix tricks that the JS `startsWith` guard would
+  miss). `shell` runs via the existing `run_process_blocking`. `web_search`/`browser`/`image_generation` throw
+  clear "needs configuration in Settings" errors instead of the stale `notWiredYet` (now retired); each tool
+  keeps its permission guard first and refuses in web mode via `isTauri()`. Verified: `npx tsc --noEmit` clean;
+  `npx vitest run` → **403 passing / 75 files** (+19); `eslint` on changed files → clean; `npm run build` →
+  `out/` emitted; **`cargo test` → 32 passing** (incl. 7 new `fs::` tests covering traversal/sibling/empty-list
+  rejection + round-trip). The exhaustive registry key-lists are untouched; one stale *behavioral* assertion in
+  `tools/__tests__/registry.test.ts` (shell "defers to Phase 2") was refreshed to the new desktop-only error.
+  ⚠️ **Real file/shell execution is desktop-only** (web `invoke` rejects) — the live round-trip needs
+  `tauri:dev`. `web_search`/`browser`/`image_generation` remain provider-stubs (real providers are a follow-up).
+  (Plan: `i-noticed-that-when-harmonic-pearl.md`, Phase 4.)
+- **2026-06-19** — **Phase 3 landed: in-process runtime tool-call loop** (built by 5 parallel worktree
+  agents, each Tier-1 adversarially QA'd, integrated via cherry-pick A→D→B→C→E). New `approval-gate.ts`
+  (promise-based bus approval plumbing), `capabilities.ts` (`resolveCapabilities`: toolIds→registry execs +
+  `skill:` bodies, missing→warning), `tool-adapter.ts` (`toAiTool` → v6 `tool()` with an approval gate;
+  `shell`/`file_write` gated; `toAiMcpTool` stub for P5). `llm-agent.ts` now injects skill bodies into the
+  system prompt, passes `tools` + `stopWhen: stepCountIs(8)`, translates `tool-call`/`tool-result`/`tool-error`
+  parts, and delegates `approve`/`deny`/`stop` to the gate (fixing the old session-vs-requestId stop bug).
+  `ChatPanel` renders live 🔧 tool-transcript rows (display-only, never persisted/replayed) + an inline
+  `ApprovalGate` filtered to the active agent. Verified: `npx tsc --noEmit` clean; `npx vitest run` →
+  **384 passing / 68 files** (+31 over Phase-2 baseline); `eslint` on changed files → no new errors (the 2
+  pre-existing ChatPanel errors are unchanged from base); `npm run build` → `out/` emitted; web-mode Playwright
+  e2e → 4/4. Four exhaustive registry tests untouched. ⚠️ **Skills work end-to-end; the six built-in tools
+  still `throw notWiredYet()` (Phase 4) and assigned MCP servers stay dormant (Phase 5).** The live
+  LLM-round-trip / real-tool / approval-round-trip path needs a desktop `tauri:dev` run (web mode has no
+  keychain/vault/DB). (Plan: `i-noticed-that-when-harmonic-pearl.md`, Phase 3.)
 - **2026-06-19** — **Phase 2 landed: attach tools/MCPs/skills to agents** (built by 4 parallel worktree
   agents, integrated via cherry-pick A→C→B→D). Added `AgentRepository.updateMcpIds`/`update`; made
   `useAgentAssignments` kind-aware (tool vs mcp); added `useInstalledMcps.installedId`; wired MCP→agent
