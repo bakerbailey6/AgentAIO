@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChatPanel from '../ChatPanel'
-import type { ChatMessage } from '@/lib/chat/types'
 
 const { mockRun, mockApprove, mockDeny, mockDb, emitSpy, busOn, busEmit } = vi.hoisted(() => {
   const mockDb = { execute: vi.fn(async () => ({ rowsAffected: 1 })), select: vi.fn(async () => []) }
