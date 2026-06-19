@@ -2,8 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import ModelList from '../ModelList'
 
-const mockDb = { execute: vi.fn(async () => ({ rowsAffected: 1 })), select: vi.fn(async (): Promise<Record<string, unknown>[]> => []) }
-vi.mock('@tauri-apps/plugin-sql', () => ({ default: { load: vi.fn(async () => mockDb) } }))
+// ModelList drives the encrypted-vault Db handle via initDb; mock initDb to
+// return a controllable handle so we can assert what findAll renders.
+const { mockDb } = vi.hoisted(() => ({
+  mockDb: {
+    execute: vi.fn(async () => ({ rowsAffected: 1, lastInsertId: 0 })),
+    select: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
+  },
+}))
+vi.mock('@/lib/storage/db', () => ({ initDb: vi.fn(async () => mockDb) }))
 
 describe('ModelList', () => {
   beforeEach(() => vi.clearAllMocks())

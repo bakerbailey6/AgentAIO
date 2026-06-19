@@ -9,6 +9,7 @@ import { StorePanel } from '@/components/store/StorePanel'
 import SettingsPanel from '@/components/settings/SettingsPanel'
 import CreateAgentPanel from '@/components/agents/CreateAgentPanel'
 import ChatPanel from '@/components/chat/ChatPanel'
+import { VaultGate } from '@/components/vault/VaultGate'
 import { useApprovals } from '@/hooks/useApprovals'
 import { useAgentCounts } from '@/hooks/useAgentCounts'
 import { initDb, AgentRepository } from '@/lib/storage'
@@ -43,6 +44,7 @@ export default function Home() {
   }, [])
 
   return (
+    <VaultGate>
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar activeItem={activeNav} onNavigate={setActiveNav} />
       <div className="flex flex-col flex-1 min-w-0">
@@ -75,5 +77,6 @@ export default function Home() {
         />
       </div>
     </div>
+    </VaultGate>
   )
 }

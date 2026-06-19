@@ -6,6 +6,7 @@
 mod commands;
 use commands::keychain::{delete_secret, get_secret, set_secret};
 use commands::process::{kill_process, send_stdin, spawn_process};
+use commands::vault::{vault_execute, vault_open, vault_select, VaultState};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -17,9 +18,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
         .manage(Arc::new(Mutex::new(HashMap::<String, std::process::Child>::new())))
+        .manage::<VaultState>(Arc::new(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             set_secret, get_secret, delete_secret,
             spawn_process, kill_process, send_stdin,
+            vault_open, vault_execute, vault_select,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
