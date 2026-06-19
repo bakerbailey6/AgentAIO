@@ -3,12 +3,12 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::{command, AppHandle, Emitter, Manager};
+use tauri::{command, AppHandle, Emitter, Manager, Runtime};
 use uuid::Uuid;
 
 type ProcessMap = Arc<Mutex<HashMap<String, Child>>>;
 
-fn get_processes(app: &AppHandle) -> ProcessMap {
+fn get_processes<R: Runtime>(app: &AppHandle<R>) -> ProcessMap {
     app.state::<ProcessMap>().inner().clone()
 }
 
@@ -57,8 +57,8 @@ fn write_stdin_in_map(processes: &ProcessMap, process_id: &str, data: &str) -> R
 }
 
 #[command]
-pub fn spawn_process(
-    app: AppHandle,
+pub fn spawn_process<R: Runtime>(
+    app: AppHandle<R>,
     cmd: String,
     args: Vec<String>,
     cwd: Option<String>,
@@ -101,29 +101,45 @@ pub fn spawn_process(
 }
 
 #[command]
-pub fn kill_process(app: AppHandle, process_id: String) -> Result<(), String> {
+pub fn kill_process<R: Runtime>(app: AppHandle<R>, process_id: String) -> Result<(), String> {
     kill_in_map(&get_processes(&app), &process_id)
 }
 
 #[command]
-pub fn send_stdin(app: AppHandle, process_id: String, data: String) -> Result<(), String> {
+pub fn send_stdin<R: Runtime>(app: AppHandle<R>, process_id: String, data: String) -> Result<(), String> {
     write_stdin_in_map(&get_processes(&app), &process_id, &data)
 }
 
-// These tests exercise the `AppHandle`-free core of the process commands
-// (`spawn_child`, `kill_in_map`, `write_stdin_in_map`) against a plain
-// `ProcessMap`. They spawn real OS child processes, so they must run on a host
-// machine. See the finding in the WP8 summary: the `tauri::test` mock-runtime
-// path could not be used here — adding `tauri`'s `test` feature as a
-// dev-dependency produced a test binary that fails to load on this Windows
-// toolchain (STATUS_ENTRYPOINT_NOT_FOUND), so the event-emission wiring in
-// `spawn_process` (the only AppHandle-dependent part) remains uncovered.
+// Two layers of coverage:
+//  1. The `AppHandle`-free core (`spawn_child`, `kill_in_map`,
+//     `write_stdin_in_map`) tested against a plain `ProcessMap`. Always on.
+//  2. The full `#[command]` functions (`spawn_process`, `kill_process`,
+//     `send_stdin`) driven through a headless `tauri::test` MockRuntime app,
+//     which exercises the `AppHandle` path — state registration and lookup via
+//     `get_processes` — that the pure-logic tests can't reach. The commands are
+//     generic over `Runtime`, so the MockRuntime handle drives the real bodies.
+//     Gated behind the `mock-runtime-tests` feature: on this Windows toolchain a
+//     test binary linked with tauri's `test` feature fails to *load*
+//     (STATUS_ENTRYPOINT_NOT_FOUND), so it is off by default. Run on Linux/CI
+//     with `cargo test --features mock-runtime-tests`.
+// All of these spawn real OS child processes, so they must run on a host machine.
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn empty_map() -> ProcessMap {
         Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    /// Build a headless mock Tauri app with the `ProcessMap` state registered,
+    /// mirroring `lib.rs`'s `.manage(...)`, so the commands resolve their state.
+    #[cfg(feature = "mock-runtime-tests")]
+    fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
+        use tauri::test::{mock_builder, mock_context, noop_assets};
+        mock_builder()
+            .manage::<ProcessMap>(empty_map())
+            .build(mock_context(noop_assets()))
+            .expect("building the mock app should succeed")
     }
 
     /// A process that reads stdin and stays alive until its stdin closes,
@@ -212,5 +228,45 @@ mod tests {
         let map = empty_map();
         let res = write_stdin_in_map(&map, "unknown-id", "data");
         assert!(res.is_err(), "writing stdin to an unknown id should return Err");
+    }
+
+    // --- command-level tests via the MockRuntime AppHandle (opt-in feature) ---
+
+    #[cfg(feature = "mock-runtime-tests")]
+    #[test]
+    fn spawn_process_command_returns_an_id() {
+        let app = mock_app();
+        let (cmd, args) = quick_echo();
+        let id = spawn_process(app.handle().clone(), cmd, args, None)
+            .expect("spawn_process should return Ok(id)");
+        assert!(!id.is_empty(), "returned process id should be non-empty");
+    }
+
+    #[cfg(feature = "mock-runtime-tests")]
+    #[test]
+    fn spawn_then_kill_via_commands_round_trips() {
+        let app = mock_app();
+        let (cmd, args) = stdin_reader();
+        let id = spawn_process(app.handle().clone(), cmd, args, None)
+            .expect("spawn_process should succeed");
+        // The child is tracked in the app-managed ProcessMap; kill_process must
+        // find it via get_processes(&app) and remove it.
+        kill_process(app.handle().clone(), id).expect("kill_process should succeed");
+    }
+
+    #[cfg(feature = "mock-runtime-tests")]
+    #[test]
+    fn kill_process_command_errors_on_unknown_id() {
+        let app = mock_app();
+        let res = kill_process(app.handle().clone(), "unknown-id".to_string());
+        assert!(res.is_err(), "killing an unknown id should return Err");
+    }
+
+    #[cfg(feature = "mock-runtime-tests")]
+    #[test]
+    fn send_stdin_command_errors_on_unknown_id() {
+        let app = mock_app();
+        let res = send_stdin(app.handle().clone(), "unknown-id".to_string(), "data".to_string());
+        assert!(res.is_err(), "sending stdin to an unknown id should return Err");
     }
 }

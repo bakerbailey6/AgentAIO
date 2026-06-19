@@ -24,3 +24,13 @@ keyring = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
+
+[features]
+# Opt-in: turns on tauri's `test` feature (headless MockRuntime) so the
+# `#[command]` process functions can be exercised end-to-end via a mock
+# AppHandle. Kept OFF by default because, on the current Windows toolchain, a
+# test binary linked with tauri's `test` feature fails to load with
+# STATUS_ENTRYPOINT_NOT_FOUND (an environmental/manifest issue, not a code one),
+# which would break the whole `cargo test` run. Enable on Linux/CI:
+#   cargo test --features mock-runtime-tests
+mock-runtime-tests = ["tauri/test"]
