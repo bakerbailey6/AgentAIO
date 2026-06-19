@@ -20,8 +20,8 @@
 
 | | |
 |---|---|
-| **Phase** | Phase 1 (Agent Shell) — **feature-complete, not yet hardened** |
-| **Verified baseline** | `npx vitest run` → **353 passing · 65 files** (observed 2026-06-19, post Phase-2). `npx tsc --noEmit` → **clean (exit 0)**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **Phase** | Phase 3 (in-process tool-call loop) landed — skills/tools/approval wired in the runtime; native tool backends (P4) + MCP connect (P5) still pending |
+| **Verified baseline** | `npx vitest run` → **384 passing · 68 files** (observed 2026-06-19, post Phase-3). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`). Web-mode Playwright e2e → **4/4 pass**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
 | **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix (below) needs a real desktop round-trip to confirm. |
 | **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
@@ -94,10 +94,25 @@ attach-UI → runtime tool-call loop → built-in tool backends → MCP native b
    assignment in the Store, a new `EditAgentPanel` (edit name/model/prompt + multi-select tools/MCPs/skills),
    `AgentRepository.updateMcpIds`/`update`, kind-aware `useAgentAssignments`, and an edit affordance on the
    agent card. ⚠️ Assignments are stored but **not yet consumed at runtime** — that's item 4.
-4. **Wire the tool-call loop (Phase 3 of the plan).** The `ToolDefinition` registry and the six §8.2
-   built-in tools exist (`src/lib/tools/`), but no agent runtime resolves/invokes them yet. Skills become
-   functional here (inject bodies into the system prompt). Built-in tool backends and a native stdio
-   MCP transport are plan Phases 4–5 (the six tools are stubs; MCP stdio can't spawn in the webview).
+4. ✅ **Wire the tool-call loop (Phase 3 of the plan) — DONE** (Changelog 2026-06-19). The LLM runtime now
+   resolves an agent's assigned tools/skills and runs a bounded multi-step tool-call loop: `resolveCapabilities`
+   (`src/lib/agents/capabilities.ts`) maps `toolIds` → `TOOL_REGISTRY` executables and loads `skill:` bodies;
+   `toAiTool` (`src/lib/agents/tool-adapter.ts`) wraps each `ToolDefinition` as a v6 `tool()` behind an approval
+   gate; `llm-agent.ts` injects skill bodies into the system prompt, passes `tools` + `stopWhen: stepCountIs(8)`,
+   and emits `tool-call`/`tool-result` events; a promise-based `approval-gate.ts` + inline `ApprovalGate` in
+   `ChatPanel` gate dangerous tools (`shell`/`file_write`). ⚠️ **Skills work end-to-end, but the six built-in
+   tools still `throw notWiredYet()` until Phase 4** (native backends) and assigned MCP servers stay dormant
+   until Phase 5 (stdio transport). Both remain below.
+
+### A2/B/C — remaining post-Phase-3 work
+- **Phase 4 — built-in tool backends (native Rust).** Replace `throw notWiredYet()` in the six §8.2 tools:
+  `file_read`/`file_write` via a new `src-tauri/src/commands/fs.rs` + `src/lib/fs.ts` bridge; `shell` via the
+  existing process commands; `web_search`/`browser`/`image_generation` return a clear "needs configuration"
+  result. Desktop-only acceptance (web `invoke` rejects).
+- **Phase 5 — MCP servers connect (native, largest).** A Tauri stdio transport so catalog (stdio) MCP servers
+  connect; route assigned `mcpServerIds` through the loop via `toAiMcpTool`; SSE works in-renderer already.
+- **B. Workflow Builder (spec §3.3)** and **C. Autonomous Executor (spec §3.3)** — need their own design passes
+  (see below); decompose only after a brainstorming + plan pass.
 
 ### B. Phase 2 — Workflow Builder (spec §3.3)
    Visual node graph for chaining agents and tools. `workflows` table is already in the schema;
@@ -132,6 +147,21 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Phase 3 landed: in-process runtime tool-call loop** (built by 5 parallel worktree
+  agents, each Tier-1 adversarially QA'd, integrated via cherry-pick A→D→B→C→E). New `approval-gate.ts`
+  (promise-based bus approval plumbing), `capabilities.ts` (`resolveCapabilities`: toolIds→registry execs +
+  `skill:` bodies, missing→warning), `tool-adapter.ts` (`toAiTool` → v6 `tool()` with an approval gate;
+  `shell`/`file_write` gated; `toAiMcpTool` stub for P5). `llm-agent.ts` now injects skill bodies into the
+  system prompt, passes `tools` + `stopWhen: stepCountIs(8)`, translates `tool-call`/`tool-result`/`tool-error`
+  parts, and delegates `approve`/`deny`/`stop` to the gate (fixing the old session-vs-requestId stop bug).
+  `ChatPanel` renders live 🔧 tool-transcript rows (display-only, never persisted/replayed) + an inline
+  `ApprovalGate` filtered to the active agent. Verified: `npx tsc --noEmit` clean; `npx vitest run` →
+  **384 passing / 68 files** (+31 over Phase-2 baseline); `eslint` on changed files → no new errors (the 2
+  pre-existing ChatPanel errors are unchanged from base); `npm run build` → `out/` emitted; web-mode Playwright
+  e2e → 4/4. Four exhaustive registry tests untouched. ⚠️ **Skills work end-to-end; the six built-in tools
+  still `throw notWiredYet()` (Phase 4) and assigned MCP servers stay dormant (Phase 5).** The live
+  LLM-round-trip / real-tool / approval-round-trip path needs a desktop `tauri:dev` run (web mode has no
+  keychain/vault/DB). (Plan: `i-noticed-that-when-harmonic-pearl.md`, Phase 3.)
 - **2026-06-19** — **Phase 2 landed: attach tools/MCPs/skills to agents** (built by 4 parallel worktree
   agents, integrated via cherry-pick A→C→B→D). Added `AgentRepository.updateMcpIds`/`update`; made
   `useAgentAssignments` kind-aware (tool vs mcp); added `useInstalledMcps.installedId`; wired MCP→agent
