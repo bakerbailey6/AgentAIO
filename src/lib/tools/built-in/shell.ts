@@ -6,8 +6,10 @@
  *
  * @module
  */
+import { invoke } from '@tauri-apps/api/core'
 import type { JSONSchema, ToolContext, ToolDefinition } from '@/lib/interfaces'
-import { assertShellAllowed, notWiredYet } from './guards'
+import { isTauri } from '@/lib/platform'
+import { assertShellAllowed } from './guards'
 
 /** Arguments accepted by {@link ShellTool}. */
 export interface ShellInput {
@@ -45,7 +47,13 @@ export class ShellTool implements ToolDefinition<ShellInput, ShellResult> {
 
   async execute(input: ShellInput, context: ToolContext): Promise<ShellResult> {
     assertShellAllowed(context.permissionScope)
-    void input
-    throw notWiredYet(this.name)
+    if (!isTauri()) {
+      throw new Error('The shell tool requires the desktop app (no process access in web mode).')
+    }
+    const out = await invoke<{ code: number | null; stdout: string; stderr: string }>(
+      'run_process_blocking',
+      { cmd: input.command, args: input.args ?? [], cwd: input.cwd },
+    )
+    return { stdout: out.stdout, stderr: out.stderr, exitCode: out.code ?? -1 }
   }
 }
