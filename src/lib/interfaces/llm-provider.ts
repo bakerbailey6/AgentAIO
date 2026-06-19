@@ -44,10 +44,23 @@ export interface ConnectionResult {
  *
  * @typeParam TModel - The provider's model shape; defaults to {@link BaseModel}.
  */
+/**
+ * How a provider is authenticated, so the UI and router can treat it
+ * declaratively instead of hard-coding provider ids:
+ *
+ * - `'api-key'` — needs a secret stored in the keychain (Anthropic, OpenAI).
+ * - `'cli'` — auth is delegated to an installed CLI signed into the user's
+ *   subscription (`claude`, `codex`); no key is collected by the app.
+ * - `'none'` — no credentials at all (local Ollama).
+ */
+export type ProviderAuthType = 'api-key' | 'cli' | 'none'
+
 export interface LLMProvider<TModel extends BaseModel = BaseModel> {
   /** Stable provider id used as the registry key, e.g. `'anthropic'`. */
   readonly providerId: string
   readonly displayName: string
+  /** How this provider authenticates — drives the Settings UI and router. */
+  readonly authType: ProviderAuthType
   /** List the models this provider exposes for the given credentials. */
   listModels(credentials: Credentials): Promise<TModel[]>
   /** Build a ready-to-call AI SDK adapter for one model. */

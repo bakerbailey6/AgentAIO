@@ -17,6 +17,7 @@ export interface OpenAIModel extends BaseModel {
 export class OpenAIProvider implements LLMProvider<OpenAIModel> {
   readonly providerId = 'openai'
   readonly displayName = 'OpenAI'
+  readonly authType = 'api-key' as const
 
   async listModels(_credentials: Credentials): Promise<OpenAIModel[]> {
     return [
