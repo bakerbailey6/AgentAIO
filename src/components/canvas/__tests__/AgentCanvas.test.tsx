@@ -27,6 +27,11 @@ vi.mock('reactflow', () => {
               { 'data-testid': `open-${n.id}`, onClick: () => n.data.onOpenChat() },
               'open',
             ),
+            React.createElement(
+              'button',
+              { 'data-testid': `edit-${n.id}`, onClick: () => n.data.onEdit() },
+              'edit',
+            ),
           ),
         ),
         children,
@@ -84,6 +89,7 @@ describe('AgentCanvas', () => {
           agent({ id: 'a2', canvasX: 30, canvasY: 40 }),
         ]}
         onOpenChat={vi.fn()}
+        onEdit={vi.fn()}
       />,
     )
 
@@ -98,16 +104,24 @@ describe('AgentCanvas', () => {
 
   it('wires each node onOpenChat to call the prop with the agent id', async () => {
     const onOpenChat = vi.fn()
-    render(<AgentCanvas agents={[agent({ id: 'a1' })]} onOpenChat={onOpenChat} />)
+    render(<AgentCanvas agents={[agent({ id: 'a1' })]} onOpenChat={onOpenChat} onEdit={vi.fn()} />)
 
     fireEvent.click(await screen.findByTestId('open-a1'))
     expect(onOpenChat).toHaveBeenCalledWith('a1')
   })
 
+  it('wires each node onEdit to call the prop with the agent id', async () => {
+    const onEdit = vi.fn()
+    render(<AgentCanvas agents={[agent({ id: 'a1' })]} onOpenChat={vi.fn()} onEdit={onEdit} />)
+
+    fireEvent.click(await screen.findByTestId('edit-a1'))
+    expect(onEdit).toHaveBeenCalledWith('a1')
+  })
+
   it('appends a newly added agent on re-render without dropping existing nodes', async () => {
     const onOpenChat = vi.fn()
     const { rerender } = render(
-      <AgentCanvas agents={[agent({ id: 'a1' })]} onOpenChat={onOpenChat} />,
+      <AgentCanvas agents={[agent({ id: 'a1' })]} onOpenChat={onOpenChat} onEdit={vi.fn()} />,
     )
     await screen.findByTestId('node-a1')
 
@@ -115,6 +129,7 @@ describe('AgentCanvas', () => {
       <AgentCanvas
         agents={[agent({ id: 'a1' }), agent({ id: 'a2', canvasX: 99, canvasY: 88 })]}
         onOpenChat={onOpenChat}
+        onEdit={vi.fn()}
       />,
     )
 
@@ -125,7 +140,7 @@ describe('AgentCanvas', () => {
   it('renders nothing until canvas state has loaded', () => {
     // loadCanvasState resolves asynchronously, so the first synchronous render
     // returns null (no reactflow host yet).
-    const { container } = render(<AgentCanvas agents={[]} onOpenChat={vi.fn()} />)
+    const { container } = render(<AgentCanvas agents={[]} onOpenChat={vi.fn()} onEdit={vi.fn()} />)
     expect(container.querySelector('[data-testid="reactflow"]')).toBeNull()
   })
 })

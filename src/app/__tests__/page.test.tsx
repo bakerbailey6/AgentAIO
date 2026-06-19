@@ -45,8 +45,10 @@ vi.mock('@/lib/event-bus', () => ({ getEventBus: vi.fn(() => bus) }))
 
 // --- Child panel stubs (keep this test about page wiring) -----------------
 vi.mock('@/components/canvas/AgentCanvas', () => ({
-  AgentCanvas: (p: { agents: AgentRow[]; onOpenChat: (id: string) => void }) => (
-    <div data-testid="canvas" data-count={p.agents.length} onClick={() => p.onOpenChat('a1')} />
+  AgentCanvas: (p: { agents: AgentRow[]; onOpenChat: (id: string) => void; onEdit: (id: string) => void }) => (
+    <div data-testid="canvas" data-count={p.agents.length} onClick={() => p.onOpenChat('a1')}>
+      <button aria-label="canvas-edit" onClick={(e) => { e.stopPropagation(); p.onEdit('a1') }} />
+    </div>
   ),
 }))
 vi.mock('@/components/chat/ChatPanel', () => ({
@@ -65,6 +67,13 @@ vi.mock('@/components/store/StorePanel', () => ({
 }))
 vi.mock('@/components/agents/CreateAgentPanel', () => ({
   default: (p: { open: boolean }) => (p.open ? <div data-testid="create-agent" /> : null),
+}))
+vi.mock('@/components/agents/EditAgentPanel', () => ({
+  default: (p: { agentId: string; onClose: () => void; onSaved: (row: AgentRow) => void }) => (
+    <div data-testid="edit-agent" data-agent={p.agentId}>
+      <button aria-label="close-edit" onClick={p.onClose} />
+    </div>
+  ),
 }))
 
 import Home from '../page'
@@ -109,6 +118,7 @@ describe('Home (page.tsx) integration', () => {
     expect(screen.queryByTestId('store')).not.toBeInTheDocument()
     expect(screen.queryByTestId('chat')).not.toBeInTheDocument()
     expect(screen.queryByTestId('create-agent')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('edit-agent')).not.toBeInTheDocument()
   })
 
   it('opens and closes the Settings panel via the sidebar', async () => {
@@ -142,6 +152,16 @@ describe('Home (page.tsx) integration', () => {
     expect(chat).toHaveAttribute('data-agent', 'a1')
     fireEvent.click(screen.getByLabelText('close-chat'))
     await waitFor(() => expect(screen.queryByTestId('chat')).not.toBeInTheDocument())
+  })
+
+  it('opens the Edit Agent panel when the canvas requests an edit, and closes it', async () => {
+    render(<Home />)
+    await waitFor(() => expect(screen.getByTestId('canvas')).toBeInTheDocument())
+    fireEvent.click(screen.getByLabelText('canvas-edit'))
+    const panel = await screen.findByTestId('edit-agent')
+    expect(panel).toHaveAttribute('data-agent', 'a1')
+    fireEvent.click(screen.getByLabelText('close-edit'))
+    await waitFor(() => expect(screen.queryByTestId('edit-agent')).not.toBeInTheDocument())
   })
 
   it('shows the approval indicator when an approval is requested', async () => {

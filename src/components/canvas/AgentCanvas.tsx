@@ -29,9 +29,10 @@ const EDGE_OPTIONS = {
 interface AgentCanvasProps {
   agents: AgentRow[]
   onOpenChat: (agentId: string) => void
+  onEdit: (agentId: string) => void
 }
 
-export function AgentCanvas({ agents, onOpenChat }: AgentCanvasProps) {
+export function AgentCanvas({ agents, onOpenChat, onEdit }: AgentCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNodeData | GroupNodeData>([])
   const [edges, , onEdgesChange] = useEdgesState([])
   const [loaded, setLoaded] = useState(false)
@@ -67,8 +68,9 @@ export function AgentCanvas({ agents, onOpenChat }: AgentCanvasProps) {
         status: 'idle' as const,
         actions: [],
         onOpenChat: () => onOpenChat(row.id),
+        onEdit: () => onEdit(row.id),
       },
-    })), [agents, onOpenChat])
+    })), [agents, onOpenChat, onEdit])
 
   useEffect(() => {
     if (!initializedRef.current) {

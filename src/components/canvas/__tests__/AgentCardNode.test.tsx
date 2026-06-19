@@ -38,6 +38,7 @@ function renderNode(over: Partial<AgentNodeData> = {}) {
     toolCount: 3,
     agentType: 'llm',
     onOpenChat: vi.fn(),
+    onEdit: vi.fn(),
     ...over,
   }
   const props = { data } as unknown as NodeProps<AgentNodeData>
@@ -123,5 +124,12 @@ describe('AgentCardNode', () => {
     renderNode({ onOpenChat })
     fireEvent.doubleClick(screen.getByText('Coder'))
     expect(onOpenChat).toHaveBeenCalled()
+  })
+
+  it('calls data.onEdit when the edit button is clicked', () => {
+    const onEdit = vi.fn()
+    renderNode({ onEdit })
+    fireEvent.click(screen.getByLabelText('Edit agent'))
+    expect(onEdit).toHaveBeenCalled()
   })
 })

@@ -17,6 +17,7 @@ export interface AgentNodeData {
   toolCount: number
   agentType: string
   onOpenChat: () => void
+  onEdit?: () => void
   [key: string]: unknown
 }
 
@@ -66,6 +67,7 @@ export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
         onApprove={handleApprove}
         onDeny={handleDeny}
         onOpen={data.onOpenChat}
+        onEdit={data.onEdit}
       />
       <Handle type="source" position={Position.Right} className="w-2.5 h-2.5 bg-violet-600 border-2 border-[#0d0e18]" />
     </div>
@@ -75,7 +77,7 @@ export function AgentCardNode({ data }: NodeProps<AgentNodeData>) {
 export const AgentCardNodeDef: CanvasNode<AgentNodeData> = {
   nodeType: 'agentCard',
   defaultData(): AgentNodeData {
-    return { label: 'New Agent', agentId: '', name: '', icon: '🤖', modelName: '', toolCount: 0, agentType: '', onOpenChat: () => {} }
+    return { label: 'New Agent', agentId: '', name: '', icon: '🤖', modelName: '', toolCount: 0, agentType: '', onOpenChat: () => {}, onEdit: () => {} }
   },
   CardComponent: AgentCardNode,
 }

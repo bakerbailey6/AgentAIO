@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 
 vi.mock('@/hooks/useAgentStatus', () => ({ useAgentStatus: () => 'running' }))
@@ -17,6 +17,7 @@ describe('AgentCard', () => {
     onApprove: vi.fn(),
     onDeny: vi.fn(),
     onOpen: vi.fn(),
+    onEdit: vi.fn(),
   }
 
   it('renders agent name', () => {
@@ -32,5 +33,12 @@ describe('AgentCard', () => {
   it('shows model name', () => {
     render(<AgentCard {...baseProps} />)
     expect(screen.getByText(/claude-sonnet-4-6/)).toBeInTheDocument()
+  })
+
+  it('calls onEdit when the edit button is clicked', () => {
+    const onEdit = vi.fn()
+    render(<AgentCard {...baseProps} onEdit={onEdit} />)
+    fireEvent.click(screen.getByLabelText('Edit agent'))
+    expect(onEdit).toHaveBeenCalled()
   })
 })
