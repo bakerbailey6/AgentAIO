@@ -152,10 +152,15 @@ docs/              design spec + implementation plans
   without `--webpack`); `cookies()/headers()/params/searchParams` are **async** and must be awaited;
   `next lint` is removed; `middleware` is renamed `proxy`. Read the docs (path above) before relying
   on any Next API.
-- **Desktop bundling is currently broken by config:** `src-tauri/tauri.conf.json` points `frontendDist`
-  at `../out`, but `next.config.ts` lacks `output: 'export'`, so `next build` emits `.next/`, not
-  `out/`. A real desktop build needs `output: 'export'` added (and its static-export constraints
-  accepted). *(Known issue; fix deliberately, not by accident.)*
+- **Desktop bundling depends on static export — keep it working:** `next.config.ts` sets
+  `output: 'export'` so `next build` emits `out/`, which is what `src-tauri/tauri.conf.json`'s
+  `frontendDist: ../out` bundles. (It's applied unconditionally on purpose: it only affects
+  `next build`; `next dev`/`npm run dev` and the Playwright e2e webServer are unaffected.) The
+  trade-off is that the app must stay a static SPA — **no Server Actions, no Route Handlers that read
+  the request, no `cookies()/headers()/proxy`, no ISR, and `next/image` needs a custom loader.**
+  Adding any of those silently breaks `next build` (and thus the desktop bundle). `next start` is N/A
+  for a static export. *(The "frontendDist points at a nonexistent `out/`" bug was fixed by adding
+  `output: 'export'`.)*
 - **`listModels` that does a real fetch must throw on failure**, never return `[]` — an unreachable
   server must be distinguishable from "zero models" (regression fixed in commit `391cabc`; the Ollama
   tests assert the throw).
