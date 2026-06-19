@@ -13,9 +13,10 @@ vi.mock('@/lib/keychain', () => ({
 }))
 vi.mock('@/lib/llm/providers/index', () => ({
   PROVIDER_REGISTRY: new Map([
-    ['anthropic', {}],
-    ['openai', {}],
-    ['ollama', {}],
+    ['anthropic', { authType: 'api-key' }],
+    ['openai', { authType: 'api-key' }],
+    ['ollama', { authType: 'none' }],
+    ['claude-cli', { authType: 'cli', displayName: 'Claude (subscription)' }],
   ]),
 }))
 
@@ -83,6 +84,14 @@ describe('SettingsPanel', () => {
 
     fireEvent.click(screen.getByText('Add Model'))
     expect(screen.getByTestId('add-model-dialog')).toBeDefined()
+  })
+
+  it('renders a subscription sign-in row for CLI providers', async () => {
+    render(<SettingsPanel onClose={onClose} />)
+    await waitFor(() => expect(screen.getByText('Subscription Sign-in')).toBeDefined())
+    expect(screen.getByText('Claude (subscription)')).toBeDefined()
+    // CLI providers must not appear in the API-key "configured" list.
+    expect(screen.getAllByText('Remove').length).toBe(3)
   })
 
   it('calls onClose when the close button is clicked', async () => {

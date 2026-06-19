@@ -9,7 +9,13 @@ import type { LLMProvider } from '@/lib/interfaces'
 describe('PROVIDER_REGISTRY', () => {
   it('is a Map keyed by providerId', () => {
     expect(PROVIDER_REGISTRY).toBeInstanceOf(Map)
-    expect([...PROVIDER_REGISTRY.keys()].sort()).toEqual(['anthropic', 'google', 'ollama', 'openai'])
+    expect([...PROVIDER_REGISTRY.keys()].sort()).toEqual([
+      'anthropic',
+      'claude-cli',
+      'codex-cli',
+      'ollama',
+      'openai',
+    ])
   })
 
   it('maps each key to the matching provider instance with the correct providerId', () => {
@@ -29,6 +35,7 @@ describe('registerProvider', () => {
     const custom: LLMProvider = {
       providerId: 'custom-test',
       displayName: 'Custom Test',
+      authType: 'api-key',
       listModels: async () => [],
       createAdapter: () => ({}) as never,
       testConnection: async () => ({ success: true }),
@@ -47,6 +54,7 @@ describe('registerProvider', () => {
     const replacement: LLMProvider = {
       providerId: 'anthropic',
       displayName: 'Replacement',
+      authType: 'api-key',
       listModels: async () => [],
       createAdapter: () => ({}) as never,
       testConnection: async () => ({ success: true }),

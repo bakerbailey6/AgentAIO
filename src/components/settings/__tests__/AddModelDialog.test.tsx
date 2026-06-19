@@ -3,19 +3,27 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import type { BaseModel } from '@/lib/interfaces'
 import AddModelDialog from '../AddModelDialog'
 
-const { mockAnthropicListModels, mockOllamaListModels, mockCreate, mockGetSecret, mockInitDb } =
-  vi.hoisted(() => ({
-    mockAnthropicListModels: vi.fn(),
-    mockOllamaListModels: vi.fn(),
-    mockCreate: vi.fn(),
-    mockGetSecret: vi.fn(),
-    mockInitDb: vi.fn(),
-  }))
+const {
+  mockAnthropicListModels,
+  mockOllamaListModels,
+  mockClaudeCliListModels,
+  mockCreate,
+  mockGetSecret,
+  mockInitDb,
+} = vi.hoisted(() => ({
+  mockAnthropicListModels: vi.fn(),
+  mockOllamaListModels: vi.fn(),
+  mockClaudeCliListModels: vi.fn(),
+  mockCreate: vi.fn(),
+  mockGetSecret: vi.fn(),
+  mockInitDb: vi.fn(),
+}))
 
 vi.mock('@/lib/llm/providers/index', () => ({
   PROVIDER_REGISTRY: new Map([
     ['anthropic', { listModels: mockAnthropicListModels }],
     ['ollama', { listModels: mockOllamaListModels }],
+    ['claude-cli', { authType: 'cli', displayName: 'Claude (subscription)', listModels: mockClaudeCliListModels }],
   ]),
 }))
 vi.mock('@/lib/keychain', () => ({ getSecret: mockGetSecret }))
@@ -46,6 +54,7 @@ describe('AddModelDialog', () => {
     mockCreate.mockResolvedValue('model-id')
     mockAnthropicListModels.mockResolvedValue([anthropicModel])
     mockOllamaListModels.mockResolvedValue([])
+    mockClaudeCliListModels.mockResolvedValue([])
   })
 
   it('renders the provider step with a button per registered provider', () => {
@@ -83,6 +92,29 @@ describe('AddModelDialog', () => {
       }),
     )
     expect(onAdded).toHaveBeenCalledTimes(1)
+  })
+
+  it('lists and adds a CLI subscription model without a key (apiKeyRef null)', async () => {
+    mockClaudeCliListModels.mockResolvedValue([
+      { id: 'opus', displayName: 'Claude Opus (subscription)', contextWindow: 200_000, supportsTools: true, supportsStreaming: true },
+    ])
+    render(<AddModelDialog onAdded={onAdded} onCancel={onCancel} />)
+
+    fireEvent.click(screen.getByText('Claude (subscription)'))
+    await waitFor(() => expect(screen.getByText('Claude Opus (subscription)')).toBeDefined())
+    expect(mockClaudeCliListModels).toHaveBeenCalledWith({})
+    expect(mockGetSecret).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByText('Claude Opus (subscription)'))
+    await waitFor(() =>
+      expect(mockCreate).toHaveBeenCalledWith({
+        provider: 'claude-cli',
+        modelName: 'opus',
+        displayName: 'Claude Opus (subscription)',
+        apiKeyRef: null,
+        baseUrl: null,
+      }),
+    )
   })
 
   it('shows the empty message when a provider returns no models', async () => {

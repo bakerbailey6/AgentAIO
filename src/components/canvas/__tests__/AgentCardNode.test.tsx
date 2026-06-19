@@ -18,6 +18,7 @@ vi.mock('reactflow', () => ({
 vi.mock('@/lib/event-bus', () => ({ getEventBus: () => mockBus }))
 vi.mock('@/lib/agents/registry', () => ({
   AGENT_REGISTRY: new Map([['llm', { approve: approveSpy, deny: denySpy }]]),
+  resolveAgentRuntimeType: (t: string) => t,
 }))
 
 const approvalsMock = vi.fn<() => ApprovalRequest[]>(() => [])

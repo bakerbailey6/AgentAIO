@@ -9,7 +9,25 @@ vi.mock('@/lib/llm/router', () => ({ LLMRouter: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(async () => null) }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) }))
 
-import { AGENT_REGISTRY, registerAgent } from '@/lib/agents/registry'
+import { AGENT_REGISTRY, registerAgent, resolveAgentRuntimeType } from '@/lib/agents/registry'
+
+describe('resolveAgentRuntimeType', () => {
+  it('maps the persisted coding-agent / custom types to runtime keys', () => {
+    expect(resolveAgentRuntimeType('coding-agent')).toBe('claude-code')
+    expect(resolveAgentRuntimeType('custom')).toBe('codex')
+  })
+
+  it('passes through llm and already-correct runtime keys', () => {
+    expect(resolveAgentRuntimeType('llm')).toBe('llm')
+    expect(resolveAgentRuntimeType('claude-code')).toBe('claude-code')
+    expect(resolveAgentRuntimeType('codex')).toBe('codex')
+  })
+
+  it('resolves a coding-agent type to a runtime present in the registry', () => {
+    expect(AGENT_REGISTRY.get(resolveAgentRuntimeType('coding-agent'))).toBeDefined()
+    expect(AGENT_REGISTRY.get(resolveAgentRuntimeType('custom'))).toBeDefined()
+  })
+})
 
 describe('AGENT_REGISTRY', () => {
   it('contains the three built-in agent types', () => {

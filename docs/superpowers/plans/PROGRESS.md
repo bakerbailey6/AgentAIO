@@ -21,7 +21,7 @@
 | | |
 |---|---|
 | **Phase** | Phase 1 (Agent Shell) — **feature-complete, not yet hardened** |
-| **Verified baseline** | `npx vitest run` → **242 tests / 48 files passing** (observed 2026-06-18) |
+| **Verified baseline** | `npx vitest run` → **284 tests / 56 files passing** (observed 2026-06-18) |
 | **TypeScript** | Product code clean. ⚠️ `npx tsc --noEmit` reports **3 errors in test files only** (`db.test.ts`, `AddProviderForm.test.tsx`) — dynamic imports vs the `module` flag. Vitest passes regardless (own resolution). Minor config fix worth doing. |
 | **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. Rust toolchain is not on system PATH (`C:\Users\chris\.cargo\bin`). |
 | **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
@@ -53,6 +53,9 @@ All 15 tasks across the three Phase-1 plans are implemented and unit-tested.
 - ✅ Task 13 — Agent card components (`src/components/canvas/`)
 - ✅ Task 14 — Spatial canvas via React Flow (`src/components/canvas/AgentCanvas.tsx`)
 - ✅ Task 15 — Store panel — **MCP catalog only** (`src/components/store/`, `src/lib/store/catalog.ts`)
+
+### Post-Phase-1 additions
+- ✅ **Subscription "login" via official CLIs** — use Claude Pro/Max & ChatGPT Plus/Pro models in ordinary chat cards without an API key, routed through the `claude`/`codex` CLIs. New `claude-cli`/`codex-cli` providers build a `CliLanguageModel` (a hand-written `LanguageModelV2`) that shells out via the sidecar, so they flow through the existing router + LLM chat runtime unchanged. Adds `authType` on the provider contract, `isTauri()`, the Rust `run_process_blocking` command, and a "Subscription Sign-in" section in Settings. ⚠️ **Desktop-only and not yet exercised on a real `tauri:dev` run** — the per-CLI JSON line shapes and login flow are best-effort (see Known Risks). Google has no compliant subscription path (Anthropic OAuth is banned, Google's personal tier sunset) so it stays API-key only. *Follow-up:* the existing Claude Code / Codex coding-agent CLI flags are outdated (`codex --approval-mode suggest --quiet`, claude without `--include-partial-messages`) and were intentionally left untouched here — modernize them once the CLIs can be exercised live.
 
 ---
 
@@ -117,3 +120,8 @@ after Phase 2.
   passing, and `npm run dev` still serves. Full `tauri:build` (native Rust compile) not run.
 - **2026-06-18** — Established this progress ledger. Phase 1 verified at 242 passing tests
   (48 files). No code changes; documentation only.
+- **2026-06-18** — Subscription "login" via official CLIs (Tasks 1–9): `claude-cli`/`codex-cli`
+  providers + `CliLanguageModel`, `run_process_blocking` Rust command, CLI auth-status/login,
+  Settings sign-in UI; also fixed the `CreateAgentPanel` agent-type resolution bug. Suite now
+  **284 tests / 56 files**; Rust `cargo test process::tests` green. Coding-agent flag
+  modernization (Task 10) deferred. Not yet run on a real desktop build.

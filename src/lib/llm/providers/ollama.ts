@@ -18,6 +18,7 @@ export interface OllamaModel extends BaseModel {
 export class OllamaProvider implements LLMProvider<OllamaModel> {
   readonly providerId = 'ollama'
   readonly displayName = 'Ollama (Local)'
+  readonly authType = 'none' as const
 
   async listModels(credentials: Credentials): Promise<OllamaModel[]> {
     const baseUrl = credentials.baseUrl ?? 'http://localhost:11434'
