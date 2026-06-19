@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
@@ -54,6 +55,46 @@ fn write_stdin_in_map(processes: &ProcessMap, process_id: &str, data: &str) -> R
     } else {
         Err(format!("Process not found: {}", process_id))
     }
+}
+
+/// Captured result of a process run to completion.
+#[derive(Serialize)]
+pub struct ProcOutput {
+    /// Exit code, or `None` if the process was killed by a signal.
+    pub code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Run a command to completion and capture its exit code + output.
+///
+/// `AppHandle`-free (unlike the streaming `spawn_process`) so the blocking
+/// behavior is unit-testable without a Tauri runtime. Returns `Err` only when
+/// the binary can't be spawned at all (e.g. not on PATH); a non-zero exit is a
+/// *successful* run reported with `code != Some(0)`. Used for one-shot CLI
+/// status probes (e.g. `codex login status`, `claude --version`) where the
+/// front end needs the exit code that `spawn_process` never surfaces.
+fn run_blocking(cmd: &str, args: &[String], cwd: Option<&str>) -> Result<ProcOutput, String> {
+    let mut builder = Command::new(cmd);
+    builder.args(args);
+    if let Some(dir) = cwd {
+        builder.current_dir(dir);
+    }
+    let output = builder.output().map_err(|e| e.to_string())?;
+    Ok(ProcOutput {
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
+#[command]
+pub fn run_process_blocking(
+    cmd: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+) -> Result<ProcOutput, String> {
+    run_blocking(&cmd, &args, cwd.as_deref())
 }
 
 #[command]
@@ -160,6 +201,41 @@ mod tests {
         } else {
             ("sh".to_string(), vec!["-c".to_string(), "echo hi".to_string()])
         }
+    }
+
+    /// A process that exits with a non-zero status, for exit-code assertions.
+    fn nonzero_exit() -> (String, Vec<String>) {
+        if cfg!(windows) {
+            ("cmd".to_string(), vec!["/C".to_string(), "exit".to_string(), "3".to_string()])
+        } else {
+            ("sh".to_string(), vec!["-c".to_string(), "exit 3".to_string()])
+        }
+    }
+
+    #[test]
+    fn run_blocking_captures_stdout_and_zero_exit() {
+        let (cmd, args) = quick_echo();
+        let out = run_blocking(&cmd, &args, None).expect("run should succeed");
+        assert_eq!(out.code, Some(0), "echo should exit 0");
+        assert!(
+            out.stdout.contains("hi"),
+            "stdout should contain the echoed text, got {:?}",
+            out.stdout
+        );
+    }
+
+    #[test]
+    fn run_blocking_errors_on_missing_binary() {
+        let res = run_blocking("acc-no-such-binary-xyzzy", &[], None);
+        assert!(res.is_err(), "spawning a non-existent binary should return Err");
+    }
+
+    #[test]
+    fn run_blocking_reports_nonzero_exit_as_ok() {
+        let (cmd, args) = nonzero_exit();
+        let out = run_blocking(&cmd, &args, None)
+            .expect("a non-zero exit is still a successful run, not an Err");
+        assert_eq!(out.code, Some(3), "exit code should be surfaced, not turned into Err");
     }
 
     #[test]
