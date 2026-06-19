@@ -20,8 +20,8 @@
 
 | | |
 |---|---|
-| **Phase** | Phase 4 (native tool backends) landed — `file_read`/`file_write` (fs.rs) + `shell` (run_process_blocking) wired; `web_search`/`browser`/`image_generation` return clear config-needed errors. MCP connect (P5) + Workflow Builder (S2) + Autonomous Executor (S3) pending |
-| **Verified baseline** | `npx vitest run` → **403 passing · 75 files** (observed 2026-06-19, post Phase-4). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`). Web-mode Playwright e2e → **4/4 pass**. `cargo test` (src-tauri) → **32 passing** (incl. 7 new `fs::` path-containment/IO tests). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **Phase** | Phase 5 (MCP servers connect) landed — native Tauri stdio transport + assigned MCP tools routed through the agent loop; SSE works in-renderer. Only the two spec phases remain: Workflow Builder (S2) + Autonomous Executor (S3), each needing a design pass |
+| **Verified baseline** | `npx vitest run` → **411 passing · 76 files** (observed 2026-06-19, post Phase-5; run from the worktree, not the main checkout). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`) — stdio MCP deliberately kept out of the web bundle. Web-mode Playwright e2e → **4/4 pass**. `cargo test` (src-tauri) → **32 passing** (unchanged; Phase 5 added no Rust). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
 | **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix and the Phase 3–4 runtime (tool calls, real file/shell execution, approval round-trips) all need a real desktop round-trip to confirm. |
 | **Rust tests** | ✅ `cargo test` (src-tauri) green — **32 passing** (AppHandle-free helpers, incl. the new `fs.rs` path-guard tests). MockRuntime command-level tests stay behind the `mock-runtime-tests` feature (off on this host). |
@@ -110,10 +110,14 @@ attach-UI → runtime tool-call loop → built-in tool backends → MCP native b
   now throw clear "needs configuration in Settings" errors. The dead `notWiredYet` helper was retired.
   ⚠️ Real file/shell execution is desktop-only (web `invoke` rejects) — verified by `cargo test` (32 passing,
   incl. 7 `fs::` path-guard tests) + unit tests; a live round-trip still needs `tauri:dev`.
-- **Phase 5 — MCP servers connect (native, largest).** A Tauri stdio transport so catalog (stdio) MCP servers
-  connect; route assigned `mcpServerIds` through the loop via `toAiMcpTool`; SSE works in-renderer already.
-- **Workflow Builder (spec §3.3)** and **Autonomous Executor (spec §3.3)** — need their own design passes
-  (see below); decompose only after a brainstorming + plan pass.
+- ✅ **Phase 5 — MCP servers connect — DONE** (Changelog 2026-06-19). New `src/lib/mcp/tauri-stdio-transport.ts`
+  frames MCP JSON-RPC over `spawn_process`/`send_stdin`/stdout-events; `registry.ts` uses it for stdio when
+  `isTauri()` (stdio is otherwise rejected, and the SDK's Node stdio transport is no longer bundled — that kept
+  `next build` green); `llm-agent` connects assigned `mcpServerIds`, lists their tools, and exposes them as
+  `mcp__<serverId>__<tool>` via `toAiMcpTool`, skipping any server that fails to connect. ⚠️ stdio MCP is
+  desktop-only; SSE works in-renderer; a live MCP round-trip needs `tauri:dev`.
+- **Workflow Builder (spec §3.3)** and **Autonomous Executor (spec §3.3)** — the last two roadmap items.
+  Each needs its own design pass (brainstorming + plan) before decomposition; see below.
 
 ### B. Phase 2 — Workflow Builder (spec §3.3)
    Visual node graph for chaining agents and tools. `workflows` table is already in the schema;
@@ -148,6 +152,22 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Phase 5 landed: MCP servers connect** (implemented solo in the integration worktree —
+  the parallel-agent model was thrashing the shared `node_modules` via competing installs, so a single-writer
+  pass was safer; adversarially Tier-1 QA'd after). New `src/lib/mcp/tauri-stdio-transport.ts`: an MCP
+  `Transport` that frames newline-delimited JSON-RPC over the existing `spawn_process` (stdout already emitted
+  line-by-line) + `send_stdin` + `kill_process`. `registry.ts` selects it for stdio when `isTauri()` and
+  **drops the static `StdioClientTransport` import** — once `llm-agent` reached the registry, that Node import
+  pulled `cross-spawn`/`child_process` into the static web bundle and broke `next build`; stdio is now
+  desktop-only (rejected in web), SSE stays (browser-safe). `llm-agent.run` connects each assigned
+  `mcpServerId`, lists its tools, and exposes them as `mcp__<serverId>__<tool>` via `toAiMcpTool` →
+  `registry.callTool`, skipping (logging, not aborting) any server that fails to connect. Verified:
+  `npx tsc --noEmit` clean; `npx vitest run` → **411 passing / 76 files** (+8); `eslint` no new errors;
+  **`npm run build` green** (`out/` emitted — static export preserved); `cargo` unchanged (no Rust). Only
+  `mcp-registry.test.ts` changed among the registry tests (behavioral: stdio now via the Tauri transport;
+  connect/disconnect assertions preserved) — the node/agents/tools key-list tests are untouched. ⚠️ A live MCP
+  round-trip (spawning a real `npx @modelcontextprotocol/server-*`) needs `tauri:dev`. (Plan:
+  `i-noticed-that-when-harmonic-pearl.md`, Phase 5.)
 - **2026-06-19** — **Phase 4 landed: native built-in tool backends** (3 parallel tasks: 2 worktree agents for
   the JS-only tools + the Rust filesystem backend done in the integration worktree; each Tier-1 adversarially
   QA'd). `file_read`/`file_write` now read/write via a new `src-tauri/src/commands/fs.rs`
