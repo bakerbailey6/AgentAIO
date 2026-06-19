@@ -20,11 +20,11 @@
 
 | | |
 |---|---|
-| **Phase** | Phase 3 (in-process tool-call loop) landed — skills/tools/approval wired in the runtime; native tool backends (P4) + MCP connect (P5) still pending |
-| **Verified baseline** | `npx vitest run` → **384 passing · 68 files** (observed 2026-06-19, post Phase-3). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`). Web-mode Playwright e2e → **4/4 pass**. Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
+| **Phase** | Phase 4 (native tool backends) landed — `file_read`/`file_write` (fs.rs) + `shell` (run_process_blocking) wired; `web_search`/`browser`/`image_generation` return clear config-needed errors. MCP connect (P5) + Workflow Builder (S2) + Autonomous Executor (S3) pending |
+| **Verified baseline** | `npx vitest run` → **403 passing · 75 files** (observed 2026-06-19, post Phase-4). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`). Web-mode Playwright e2e → **4/4 pass**. `cargo test` (src-tauri) → **32 passing** (incl. 7 new `fs::` path-containment/IO tests). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — it's a declared dependency but was absent from the local install (the old "1 failing" baseline was masking this). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
-| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix (below) needs a real desktop round-trip to confirm. |
-| **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
+| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix and the Phase 3–4 runtime (tool calls, real file/shell execution, approval round-trips) all need a real desktop round-trip to confirm. |
+| **Rust tests** | ✅ `cargo test` (src-tauri) green — **32 passing** (AppHandle-free helpers, incl. the new `fs.rs` path-guard tests). MockRuntime command-level tests stay behind the `mock-runtime-tests` feature (off on this host). |
 | **Design spec** | [agent-command-center-design.md](../specs/2026-06-18-agent-command-center-design.md) |
 
 ---
@@ -100,18 +100,19 @@ attach-UI → runtime tool-call loop → built-in tool backends → MCP native b
    `toAiTool` (`src/lib/agents/tool-adapter.ts`) wraps each `ToolDefinition` as a v6 `tool()` behind an approval
    gate; `llm-agent.ts` injects skill bodies into the system prompt, passes `tools` + `stopWhen: stepCountIs(8)`,
    and emits `tool-call`/`tool-result` events; a promise-based `approval-gate.ts` + inline `ApprovalGate` in
-   `ChatPanel` gate dangerous tools (`shell`/`file_write`). ⚠️ **Skills work end-to-end, but the six built-in
-   tools still `throw notWiredYet()` until Phase 4** (native backends) and assigned MCP servers stay dormant
-   until Phase 5 (stdio transport). Both remain below.
+   `ChatPanel` gate dangerous tools (`shell`/`file_write`). ✅ As of Phase 4 the file/shell tools have real
+   backends; assigned MCP servers stay dormant until Phase 5 (stdio transport).
 
-### A2/B/C — remaining post-Phase-3 work
-- **Phase 4 — built-in tool backends (native Rust).** Replace `throw notWiredYet()` in the six §8.2 tools:
-  `file_read`/`file_write` via a new `src-tauri/src/commands/fs.rs` + `src/lib/fs.ts` bridge; `shell` via the
-  existing process commands; `web_search`/`browser`/`image_generation` return a clear "needs configuration"
-  result. Desktop-only acceptance (web `invoke` rejects).
+### Remaining work (post-Phase-4)
+- ✅ **Phase 4 — built-in tool backends — DONE** (Changelog 2026-06-19). `file_read`/`file_write` via a new
+  `src-tauri/src/commands/fs.rs` (+ `src/lib/fs.ts` bridge, with a lexically-normalized allow-list re-check on
+  the Rust side); `shell` via the existing `run_process_blocking`; `web_search`/`browser`/`image_generation`
+  now throw clear "needs configuration in Settings" errors. The dead `notWiredYet` helper was retired.
+  ⚠️ Real file/shell execution is desktop-only (web `invoke` rejects) — verified by `cargo test` (32 passing,
+  incl. 7 `fs::` path-guard tests) + unit tests; a live round-trip still needs `tauri:dev`.
 - **Phase 5 — MCP servers connect (native, largest).** A Tauri stdio transport so catalog (stdio) MCP servers
   connect; route assigned `mcpServerIds` through the loop via `toAiMcpTool`; SSE works in-renderer already.
-- **B. Workflow Builder (spec §3.3)** and **C. Autonomous Executor (spec §3.3)** — need their own design passes
+- **Workflow Builder (spec §3.3)** and **Autonomous Executor (spec §3.3)** — need their own design passes
   (see below); decompose only after a brainstorming + plan pass.
 
 ### B. Phase 2 — Workflow Builder (spec §3.3)
@@ -147,6 +148,22 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Phase 4 landed: native built-in tool backends** (3 parallel tasks: 2 worktree agents for
+  the JS-only tools + the Rust filesystem backend done in the integration worktree; each Tier-1 adversarially
+  QA'd). `file_read`/`file_write` now read/write via a new `src-tauri/src/commands/fs.rs`
+  (`fs_read_text`/`fs_write_text`, registered in `mod.rs` + `lib.rs`) through a new `src/lib/fs.ts` bridge; the
+  Rust side re-checks the path against the agent's `allowedPaths` with a **lexically-normalized, component-wise
+  containment check** (defeats `..` traversal and sibling-prefix tricks that the JS `startsWith` guard would
+  miss). `shell` runs via the existing `run_process_blocking`. `web_search`/`browser`/`image_generation` throw
+  clear "needs configuration in Settings" errors instead of the stale `notWiredYet` (now retired); each tool
+  keeps its permission guard first and refuses in web mode via `isTauri()`. Verified: `npx tsc --noEmit` clean;
+  `npx vitest run` → **403 passing / 75 files** (+19); `eslint` on changed files → clean; `npm run build` →
+  `out/` emitted; **`cargo test` → 32 passing** (incl. 7 new `fs::` tests covering traversal/sibling/empty-list
+  rejection + round-trip). The exhaustive registry key-lists are untouched; one stale *behavioral* assertion in
+  `tools/__tests__/registry.test.ts` (shell "defers to Phase 2") was refreshed to the new desktop-only error.
+  ⚠️ **Real file/shell execution is desktop-only** (web `invoke` rejects) — the live round-trip needs
+  `tauri:dev`. `web_search`/`browser`/`image_generation` remain provider-stubs (real providers are a follow-up).
+  (Plan: `i-noticed-that-when-harmonic-pearl.md`, Phase 4.)
 - **2026-06-19** — **Phase 3 landed: in-process runtime tool-call loop** (built by 5 parallel worktree
   agents, each Tier-1 adversarially QA'd, integrated via cherry-pick A→D→B→C→E). New `approval-gate.ts`
   (promise-based bus approval plumbing), `capabilities.ts` (`resolveCapabilities`: toolIds→registry execs +
