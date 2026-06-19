@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
 // --- hoisted spies shared between the storage mock and the assertions -------
 const h = vi.hoisted(() => ({
@@ -10,6 +10,9 @@ const h = vi.hoisted(() => ({
   finish: vi.fn(),
   runWorkflow: vi.fn(),
   normalizeGraph: vi.fn(),
+  isConnectionCompatible: vi.fn(),
+  // captured from the reactflow mock so tests can drive onConnect directly
+  lastOnConnect: { fn: null as ((c: unknown) => void) | null },
 }))
 
 // --- mock the Tauri/storage boundary (classes with spied methods) ----------
@@ -27,6 +30,19 @@ vi.mock('@/lib/storage', () => ({
 
 vi.mock('@/lib/workflows/engine', () => ({ runWorkflow: h.runWorkflow }))
 vi.mock('@/lib/workflows/graph', () => ({ normalizeGraph: h.normalizeGraph }))
+vi.mock('@/lib/workflows/port-compat', () => ({
+  isConnectionCompatible: h.isConnectionCompatible,
+}))
+vi.mock('@/components/workflows/WorkflowRunHistory', () => ({
+  WorkflowRunHistory: ({ onRerun }: { onRerun: (input: unknown) => void }) => (
+    <div data-testid="run-history">
+      history
+      <button data-testid="history-rerun" onClick={() => onRerun({ re: 1 })}>
+        rerun
+      </button>
+    </div>
+  ),
+}))
 
 // Stable references — returning a fresh object/`{}` each render would make the
 // editor's `useEffect([run.nodeStatus])` re-fire on every render (infinite loop).
@@ -80,7 +96,24 @@ vi.mock('reactflow', () => {
   }
   return {
     __esModule: true,
-    default: ({ children }: { children?: React.ReactNode }) => <div data-testid="rf">{children}</div>,
+    default: ({
+      children,
+      onConnect,
+      edges,
+    }: {
+      children?: React.ReactNode
+      onConnect?: (c: unknown) => void
+      edges?: unknown[]
+    }) => {
+      // Expose the editor's onConnect so tests can drive a wiring attempt, and
+      // surface the current edge count so they can assert addEdge happened.
+      h.lastOnConnect.fn = onConnect ?? null
+      return (
+        <div data-testid="rf" data-edge-count={edges?.length ?? 0}>
+          {children}
+        </div>
+      )
+    },
     Background: () => null,
     Controls: () => null,
     BackgroundVariant: { Dots: 'dots' },
@@ -111,6 +144,8 @@ describe('WorkflowEditor', () => {
     h.finish.mockResolvedValue(undefined)
     h.runWorkflow.mockResolvedValue({ status: 'done', output: { value: 1 }, nodeStates: {} })
     h.normalizeGraph.mockReturnValue({ nodes: [], edges: [] })
+    h.isConnectionCompatible.mockReturnValue(true)
+    h.lastOnConnect.fn = null
   })
 
   it('renders the workflow name after load', async () => {
@@ -157,5 +192,57 @@ describe('WorkflowEditor', () => {
     await screen.findByText('WF')
     fireEvent.click(screen.getByText('← Back'))
     expect(onBack).toHaveBeenCalled()
+  })
+
+  it('rejects an incompatible connection: no edge added, shows a notice', async () => {
+    h.isConnectionCompatible.mockReturnValue(false)
+    render(<WorkflowEditor workflowId="wf1" onBack={() => {}} />)
+    await screen.findByText('WF')
+
+    const rf = screen.getByTestId('rf')
+    expect(rf).toHaveAttribute('data-edge-count', '0')
+
+    // drive the editor's onConnect with an incompatible wiring
+    fireEvent.click(rf) // ensure rendered; onConnect captured during render
+    expect(h.lastOnConnect.fn).toBeTruthy()
+    await act(async () => {
+      h.lastOnConnect.fn!({ source: 'a', target: 'b' })
+    })
+
+    // no edge was added and the amber notice is shown
+    expect(screen.getByTestId('rf')).toHaveAttribute('data-edge-count', '0')
+    expect(screen.getByText('Incompatible port types')).toBeInTheDocument()
+  })
+
+  it('adds an edge when the connection is compatible', async () => {
+    h.isConnectionCompatible.mockReturnValue(true)
+    render(<WorkflowEditor workflowId="wf1" onBack={() => {}} />)
+    await screen.findByText('WF')
+
+    expect(h.lastOnConnect.fn).toBeTruthy()
+    await act(async () => {
+      h.lastOnConnect.fn!({ source: 'a', target: 'b' })
+    })
+
+    expect(screen.getByTestId('rf')).toHaveAttribute('data-edge-count', '1')
+  })
+
+  it('toggles the run-history panel from the History button', async () => {
+    render(<WorkflowEditor workflowId="wf1" onBack={() => {}} />)
+    await screen.findByText('WF')
+    expect(screen.queryByTestId('run-history')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('History'))
+    expect(screen.getByTestId('run-history')).toBeInTheDocument()
+  })
+
+  it('re-runs the workflow from the history stub: create → runWorkflow → finish', async () => {
+    render(<WorkflowEditor workflowId="wf1" onBack={() => {}} />)
+    await screen.findByText('WF')
+    fireEvent.click(screen.getByText('History'))
+    fireEvent.click(screen.getByTestId('history-rerun'))
+
+    await waitFor(() => expect(h.create).toHaveBeenCalledWith({ workflowId: 'wf1', input: { re: 1 } }))
+    await waitFor(() => expect(h.runWorkflow).toHaveBeenCalled())
+    await waitFor(() => expect(h.finish).toHaveBeenCalled())
   })
 })

@@ -20,7 +20,9 @@ import { RunModal } from './RunModal'
 import { normalizeGraph } from '@/lib/workflows/graph'
 import { runWorkflow } from '@/lib/workflows/engine'
 import { WORKFLOW_NODE_REGISTRY } from '@/lib/workflows/node-registry'
+import { isConnectionCompatible } from '@/lib/workflows/port-compat'
 import { useWorkflowRun } from '@/hooks/useWorkflowRun'
+import { WorkflowRunHistory } from '@/components/workflows/WorkflowRunHistory'
 import { WorkflowRepository, WorkflowRunRepository, initDb, type Db } from '@/lib/storage'
 
 export interface WorkflowEditorProps {
@@ -43,6 +45,9 @@ export function WorkflowEditor({ workflowId, onBack }: WorkflowEditorProps): Rea
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [runOpen, setRunOpen] = useState(false)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyKey, setHistoryKey] = useState(0)
+  const [connectError, setConnectError] = useState<string | null>(null)
 
   const dbRef = useRef<Db | null>(null)
 
@@ -68,8 +73,16 @@ export function WorkflowEditor({ workflowId, onBack }: WorkflowEditorProps): Rea
 
   // --- React Flow handlers ------------------------------------------------
   const onConnect = useCallback(
-    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
-    [setEdges],
+    (c: Connection) => {
+      const ok = isConnectionCompatible(nodes as never, WORKFLOW_NODE_REGISTRY, c as never)
+      if (!ok) {
+        setConnectError('Incompatible port types')
+        return
+      }
+      setConnectError(null)
+      setEdges((eds) => addEdge(c, eds))
+    },
+    [nodes, setEdges],
   )
 
   const onNodeClick = useCallback(
@@ -114,7 +127,7 @@ export function WorkflowEditor({ workflowId, onBack }: WorkflowEditorProps): Rea
   }, [workflowId, nodes, edges])
 
   // --- run ----------------------------------------------------------------
-  const handleRun = useCallback(
+  const runWith = useCallback(
     async (input: unknown) => {
       const db = dbRef.current
       if (!db) return
@@ -140,10 +153,20 @@ export function WorkflowEditor({ workflowId, onBack }: WorkflowEditorProps): Rea
         result: result.output,
         nodeStates: result.nodeStates,
       })
-      setRunOpen(false)
+      setHistoryKey((k) => k + 1)
     },
     [workflowId, nodes, edges],
   )
+
+  const handleRun = useCallback(
+    async (input: unknown) => {
+      await runWith(input)
+      setRunOpen(false)
+    },
+    [runWith],
+  )
+
+  const handleRerun = useCallback((input: unknown) => runWith(input), [runWith])
 
   // --- live per-node status ----------------------------------------------
   const run = useWorkflowRun(activeRunId)
@@ -166,6 +189,18 @@ export function WorkflowEditor({ workflowId, onBack }: WorkflowEditorProps): Rea
           ← Back
         </button>
         <span className="flex-1 truncate text-[13px] font-semibold text-zinc-100">{name}</span>
+        {connectError && (
+          <span className="rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-1 text-[12px] text-amber-300">
+            {connectError}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          className="rounded-md border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-[13px] text-zinc-300 transition-colors hover:bg-white/[0.08]"
+        >
+          History
+        </button>
         <button
           type="button"
           onClick={handleSave}
@@ -202,11 +237,21 @@ export function WorkflowEditor({ workflowId, onBack }: WorkflowEditorProps): Rea
           </ReactFlow>
         </div>
 
-        <NodeConfigRail
-          node={selected ? { id: selected.id, type: selected.data.type, config: selected.data.config } : null}
-          onChange={handleConfigChange}
-          onClose={() => setSelectedId(null)}
-        />
+        {showHistory ? (
+          <div className="w-80 shrink-0 border-l border-white/[0.08] bg-[#0d0d0f]">
+            <WorkflowRunHistory
+              workflowId={workflowId}
+              refreshKey={historyKey}
+              onRerun={handleRerun}
+            />
+          </div>
+        ) : (
+          <NodeConfigRail
+            node={selected ? { id: selected.id, type: selected.data.type, config: selected.data.config } : null}
+            onChange={handleConfigChange}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
       </div>
 
       <RunModal open={runOpen} onClose={() => setRunOpen(false)} onRun={handleRun} />
