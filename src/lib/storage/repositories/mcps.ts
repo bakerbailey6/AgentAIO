@@ -1,4 +1,11 @@
-// src/lib/storage/repositories/mcps.ts
+/**
+ * Repository for the `mcps` table — configured MCP servers. `enabled` is stored
+ * as 0/1 and exposed as a boolean; `envVarsRef` is a JSON array of keychain
+ * references. The {@link MCPRegistry} reads these rows to open connections.
+ * See {@link AgentRepository} for the pattern.
+ *
+ * @module
+ */
 import type { Db } from '../db'
 
 export interface McpRow {

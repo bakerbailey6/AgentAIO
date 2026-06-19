@@ -1,4 +1,12 @@
-// src/lib/storage/index.ts
+/**
+ * Public surface of the storage layer.
+ *
+ * Re-exports {@link initDb} and one repository per table. Each repository wraps
+ * the SQL for its table and (de)serializes JSON columns, so callers work with
+ * typed `*Row` objects instead of raw SQL.
+ *
+ * @module
+ */
 export { initDb } from './db'
 export type { Db } from './db'
 export { AgentRepository } from './repositories/agents'

@@ -1,4 +1,10 @@
-// src/lib/storage/repositories/sessions.ts
+/**
+ * Repository for the `sessions` table — one row per agent run, holding the
+ * conversation `messages` (JSON) plus running token/cost totals. Deleting an
+ * agent cascades its sessions away. See {@link AgentRepository} for the pattern.
+ *
+ * @module
+ */
 import type { Db } from '../db'
 
 export interface SessionRow {

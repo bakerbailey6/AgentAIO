@@ -1,4 +1,15 @@
-// src/lib/agents/codex-agent.ts
+/**
+ * Coding-agent runtime that drives the `codex` CLI as a child process.
+ *
+ * Mirrors {@link ClaudeCodeAgentProvider}: the Rust sidecar spawns the process
+ * and streams its stdout back as Tauri events, which this provider maps to
+ * {@link AgentEvent}s and answers with `yes`/`no` over stdin. The differences
+ * are the command (`codex --approval-mode suggest --quiet`), the line types it
+ * recognises (`message`/`done`), and that it takes no `allowedPaths`.
+ * Desktop-only.
+ *
+ * @module
+ */
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { AgentProvider, AgentEvent, AgentSession, AgentCapabilities } from '@/lib/interfaces'
@@ -7,6 +18,7 @@ export interface CodexConfig {
   projectDirectory: string
 }
 
+/** Abort the run if no output arrives for this long (ms). */
 const TIMEOUT_MS = 30_000
 
 export class CodexAgentProvider implements AgentProvider<CodexConfig, AgentEvent> {
@@ -19,6 +31,14 @@ export class CodexAgentProvider implements AgentProvider<CodexConfig, AgentEvent
 
   async configure(_config: CodexConfig): Promise<void> {}
 
+  /**
+   * Spawn the `codex` CLI in the project directory and yield its output as
+   * agent events until it emits a `done` line (or stalls past
+   * {@link TIMEOUT_MS}). See {@link ClaudeCodeAgentProvider.run} for the
+   * queue-and-poll mechanism shared by both coding agents.
+   *
+   * @throws If the session has no `projectDirectory` (this runtime requires one).
+   */
   async *run(session: AgentSession, input: string): AsyncIterable<AgentEvent> {
     yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'running' } }
 

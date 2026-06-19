@@ -1,4 +1,14 @@
-// src/lib/agents/claude-code-agent.ts
+/**
+ * Coding-agent runtime that drives the `claude` CLI as a child process.
+ *
+ * The process is spawned through the Rust sidecar (`spawn_process`), which
+ * streams the CLI's stdout back as Tauri events. This provider translates that
+ * line-delimited `stream-json` output into {@link AgentEvent}s and relays
+ * approve/deny decisions back to the process over stdin. Desktop-only: it relies
+ * on the Tauri commands and so does nothing in browser mode.
+ *
+ * @module
+ */
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type { AgentProvider, AgentEvent, AgentSession, AgentCapabilities } from '@/lib/interfaces'
@@ -8,6 +18,7 @@ export interface ClaudeCodeConfig {
   allowedPaths: string[]
 }
 
+/** Abort the run if no output arrives for this long (ms). */
 const TIMEOUT_MS = 30_000
 
 export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, AgentEvent> {
@@ -20,6 +31,18 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
 
   async configure(_config: ClaudeCodeConfig): Promise<void> {}
 
+  /**
+   * Spawn `claude --print --output-format stream-json` in the project directory
+   * and yield its output as agent events until the process emits a `result`
+   * line (or stalls past {@link TIMEOUT_MS}).
+   *
+   * The Tauri event callback can't be `yield`ed from directly, so incoming lines
+   * are buffered in `eventQueue` and the generator drains that queue on a short
+   * poll, mapping each line to a `text-delta`, `approval-request`, or
+   * `tool-call` event.
+   *
+   * @throws If the session has no `projectDirectory` (this runtime requires one).
+   */
   async *run(session: AgentSession, input: string): AsyncIterable<AgentEvent> {
     yield { type: 'status-change', agentId: session.agentId, timestamp: Date.now(), payload: { status: 'running' } }
 

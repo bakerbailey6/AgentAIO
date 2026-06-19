@@ -1,8 +1,16 @@
+//! OS-keychain commands.
+//!
+//! Stores and retrieves secrets (API keys, tokens) in the platform keychain —
+//! Windows Credential Manager, macOS Keychain, or libsecret — under a single
+//! service name. The front-end wrappers live in `src/lib/keychain.ts`. Secrets
+//! are never written to the database; only their `key` is persisted there.
 use keyring::Entry;
 use tauri::command;
 
+/// Keychain service name all entries are filed under.
 const SERVICE: &str = "agent-command-center";
 
+/// Store (or overwrite) the secret `value` under `key`.
 #[command]
 pub fn set_secret(key: String, value: String) -> Result<(), String> {
     Entry::new(SERVICE, &key)
@@ -11,6 +19,7 @@ pub fn set_secret(key: String, value: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Read the secret stored under `key`, or `Ok(None)` if there is no such entry.
 #[command]
 pub fn get_secret(key: String) -> Result<Option<String>, String> {
     let entry = Entry::new(SERVICE, &key).map_err(|e| e.to_string())?;
@@ -21,6 +30,7 @@ pub fn get_secret(key: String) -> Result<Option<String>, String> {
     }
 }
 
+/// Remove the secret stored under `key`. Deleting a missing key is a no-op.
 #[command]
 pub fn delete_secret(key: String) -> Result<(), String> {
     let entry = Entry::new(SERVICE, &key).map_err(|e| e.to_string())?;

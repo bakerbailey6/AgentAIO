@@ -1,6 +1,16 @@
-// src/lib/storage/repositories/agents.ts
+/**
+ * Repository for the `agents` table.
+ *
+ * Owns all SQL for agents and converts between snake_case database rows and the
+ * camelCase {@link AgentRow} used by the app, parsing the JSON `tool_ids` /
+ * `mcp_ids` columns into arrays. This is the canonical example of the
+ * repository pattern the other tables follow.
+ *
+ * @module
+ */
 import type { Db } from '../db'
 
+/** An agent as stored, with JSON columns already parsed. */
 export interface AgentRow {
   id: string
   name: string
@@ -30,6 +40,7 @@ interface AgentInsert {
 export class AgentRepository {
   constructor(private db: Db) {}
 
+  /** Insert a new agent and return its generated id. */
   async create(data: AgentInsert): Promise<string> {
     const id = crypto.randomUUID()
     await this.db.execute(
@@ -51,11 +62,13 @@ export class AgentRepository {
     return id
   }
 
+  /** Return every agent. */
   async findAll(): Promise<AgentRow[]> {
     const rows = await this.db.select<Record<string, unknown>[]>('SELECT * FROM agents')
     return rows.map(this.deserialize)
   }
 
+  /** Return one agent by id, or `null` if it doesn't exist. */
   async findById(id: string): Promise<AgentRow | null> {
     const rows = await this.db.select<Record<string, unknown>[]>(
       'SELECT * FROM agents WHERE id = $1',
@@ -64,6 +77,7 @@ export class AgentRepository {
     return rows[0] ? this.deserialize(rows[0]) : null
   }
 
+  /** Persist an agent's canvas position. */
   async updatePosition(id: string, x: number, y: number): Promise<void> {
     await this.db.execute(
       'UPDATE agents SET canvas_x = $1, canvas_y = $2 WHERE id = $3',
@@ -71,10 +85,12 @@ export class AgentRepository {
     )
   }
 
+  /** Delete an agent (its sessions cascade away via the FK). */
   async delete(id: string): Promise<void> {
     await this.db.execute('DELETE FROM agents WHERE id = $1', [id])
   }
 
+  /** Map a raw snake_case DB row to an {@link AgentRow}, parsing JSON columns. */
   private deserialize(row: Record<string, unknown>): AgentRow {
     return {
       id: row.id as string,

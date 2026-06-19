@@ -1,7 +1,15 @@
-// src/lib/canvas/persistence.ts
+/**
+ * Persistence for canvas layout: the viewport, group definitions, and per-agent
+ * positions. Canvas state lives in a single-row `canvas_state` table (id = 1),
+ * upserted on change; agent positions are written straight onto the `agents`
+ * rows so they survive reloads.
+ *
+ * @module
+ */
 import { initDb } from '@/lib/storage'
 import type { Viewport } from 'reactflow'
 
+/** Upsert the singleton canvas-state row with the current viewport and groups. */
 export async function saveCanvasState(viewport: Viewport, groups: unknown[]): Promise<void> {
   const db = await initDb()
   await db.execute(
@@ -12,6 +20,7 @@ export async function saveCanvasState(viewport: Viewport, groups: unknown[]): Pr
   )
 }
 
+/** Load the saved canvas state, or `null` if nothing has been saved yet. */
 export async function loadCanvasState(): Promise<{ viewport: Viewport; groups: unknown[] } | null> {
   const db = await initDb()
   const rows = await db.select<Array<Record<string, unknown>>>('SELECT * FROM canvas_state WHERE id = 1')
@@ -23,6 +32,7 @@ export async function loadCanvasState(): Promise<{ viewport: Viewport; groups: u
   }
 }
 
+/** Persist a single agent's canvas position after a drag. */
 export async function saveAgentPosition(agentId: string, x: number, y: number): Promise<void> {
   const db = await initDb()
   await db.execute('UPDATE agents SET canvas_x = $1, canvas_y = $2 WHERE id = $3', [x, y, agentId])

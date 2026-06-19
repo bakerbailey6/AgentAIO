@@ -7,6 +7,13 @@ export interface AnthropicModel extends BaseModel {
   provider: 'anthropic'
 }
 
+/**
+ * Anthropic Claude provider, backed by `@ai-sdk/anthropic`.
+ *
+ * {@link listModels} returns a curated, static list of Claude models rather than
+ * querying an endpoint, so {@link testConnection} only validates that the list
+ * resolves — it does not make a network round-trip.
+ */
 export class AnthropicProvider implements LLMProvider<AnthropicModel> {
   readonly providerId = 'anthropic'
   readonly displayName = 'Anthropic'

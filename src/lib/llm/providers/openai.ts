@@ -7,6 +7,13 @@ export interface OpenAIModel extends BaseModel {
   provider: 'openai'
 }
 
+/**
+ * OpenAI provider, backed by `@ai-sdk/openai`.
+ *
+ * {@link listModels} returns a curated, static list. A `baseUrl` in the
+ * credentials is forwarded to the SDK, so this provider also serves any
+ * OpenAI-compatible endpoint (Groq, Together, LM Studio, …).
+ */
 export class OpenAIProvider implements LLMProvider<OpenAIModel> {
   readonly providerId = 'openai'
   readonly displayName = 'OpenAI'

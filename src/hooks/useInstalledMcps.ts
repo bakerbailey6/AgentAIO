@@ -3,6 +3,13 @@ import { initDb, McpRepository } from '@/lib/storage'
 import type { McpRow } from '@/lib/storage'
 import type { CatalogMcpEntry } from '@/lib/store/catalog'
 
+/**
+ * Manage the user's installed MCP servers for the store UI.
+ *
+ * Loads installed servers from storage on mount and returns the list plus
+ * `install` / `uninstall` / `isInstalled` helpers that keep the database and the
+ * in-memory list in sync. `install` maps a catalog entry to a new `mcps` row.
+ */
 export function useInstalledMcps() {
   const [mcps, setMcps] = useState<McpRow[]>([])
 

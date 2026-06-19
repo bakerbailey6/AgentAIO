@@ -1,4 +1,19 @@
-// src/lib/storage/schema.ts
+/**
+ * Database schema as a list of idempotent migrations.
+ *
+ * Each exported `CREATE_*` constant is a `CREATE TABLE IF NOT EXISTS` statement;
+ * {@link ALL_MIGRATIONS} is the ordered list applied by `initDb` on startup.
+ * Because every statement is `IF NOT EXISTS`, running them repeatedly is safe.
+ *
+ * Notes on intent:
+ * - Ids default to random 16-byte hex, timestamps to `unixepoch()`.
+ * - JSON-array columns (`tool_ids`, `mcp_ids`, `env_vars_ref`) are stored as
+ *   text and parsed in the repositories.
+ * - `models.api_key_ref` holds a *keychain reference*, never the key itself.
+ * - `audit_log` is append-only by convention — there are no update/delete paths.
+ *
+ * @module
+ */
 export const CREATE_AGENTS = `
   CREATE TABLE IF NOT EXISTS agents (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -83,6 +98,7 @@ export const CREATE_CANVAS_STATE = `
   )
 `
 
+/** Every migration, in the order they must be applied. */
 export const ALL_MIGRATIONS = [
   CREATE_AGENTS,
   CREATE_SESSIONS,

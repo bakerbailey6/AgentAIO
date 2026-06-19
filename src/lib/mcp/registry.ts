@@ -1,4 +1,13 @@
-// src/lib/mcp/registry.ts
+/**
+ * Manages live connections to Model Context Protocol (MCP) servers.
+ *
+ * Holds one MCP {@link Client} per connected server (keyed by the stored server
+ * id), choosing a `stdio` or `sse` transport from the server's persisted config.
+ * Once connected, agents can list and call the server's tools through this
+ * registry. Use {@link getMCPRegistry} for the app-wide singleton.
+ *
+ * @module
+ */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
@@ -13,6 +22,14 @@ interface ConnectedServer {
 export class MCPRegistry {
   private connections = new Map<string, ConnectedServer>()
 
+  /**
+   * Connect to the stored MCP server `serverId`, if not already connected.
+   *
+   * Picks a transport from the server's config: `stdio` splits `commandOrUrl`
+   * into a command + args, `sse` treats it as a URL.
+   *
+   * @throws If no MCP server with that id exists in storage.
+   */
   async connect(serverId: string): Promise<void> {
     if (this.connections.has(serverId)) return
 
@@ -35,6 +52,7 @@ export class MCPRegistry {
     this.connections.set(serverId, { client, serverId })
   }
 
+  /** Close the connection to `serverId`. A no-op if not connected. */
   async disconnect(serverId: string): Promise<void> {
     const conn = this.connections.get(serverId)
     if (!conn) return
@@ -42,16 +60,27 @@ export class MCPRegistry {
     this.connections.delete(serverId)
   }
 
+  /** Ids of all currently connected servers. */
   listConnected(): string[] {
     return Array.from(this.connections.keys())
   }
 
+  /**
+   * Invoke a tool on a connected server.
+   *
+   * @throws If `serverId` is not currently connected.
+   */
   async callTool(serverId: string, toolName: string, args: unknown): Promise<unknown> {
     const conn = this.connections.get(serverId)
     if (!conn) throw new Error(`MCP server not connected: ${serverId}`)
     return conn.client.callTool({ name: toolName, arguments: args as Record<string, unknown> })
   }
 
+  /**
+   * List the tools a connected server exposes.
+   *
+   * @throws If `serverId` is not currently connected.
+   */
   async listTools(serverId: string): Promise<Array<{ name: string; description?: string }>> {
     const conn = this.connections.get(serverId)
     if (!conn) throw new Error(`MCP server not connected: ${serverId}`)
@@ -61,6 +90,8 @@ export class MCPRegistry {
 }
 
 let _registry: MCPRegistry | null = null
+
+/** Return the app-wide MCP registry, creating it on first use. */
 export function getMCPRegistry(): MCPRegistry {
   if (!_registry) _registry = new MCPRegistry()
   return _registry
