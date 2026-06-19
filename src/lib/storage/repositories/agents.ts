@@ -85,6 +85,14 @@ export class AgentRepository {
     )
   }
 
+  /** Replace an agent's assigned tool/skill ids (the store's assign action). */
+  async updateToolIds(id: string, toolIds: string[]): Promise<void> {
+    await this.db.execute(
+      'UPDATE agents SET tool_ids = $1 WHERE id = $2',
+      [JSON.stringify(toolIds), id],
+    )
+  }
+
   /** Delete an agent (its sessions cascade away via the FK). */
   async delete(id: string): Promise<void> {
     await this.db.execute('DELETE FROM agents WHERE id = $1', [id])
