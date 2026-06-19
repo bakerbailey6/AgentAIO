@@ -7,6 +7,10 @@ on a spatial canvas. One React/TypeScript codebase; native capabilities come fro
 > everything renders client-side, and runtime data comes from the **Tauri SQLite plugin** — not from
 > Server Components or `fetch`. There is one route.
 
+> **See also:** [`README.md`](README.md) (project overview + diagrams), [`CONTRIBUTING.md`](CONTRIBUTING.md)
+> (setup + conventions), [`SECURITY.md`](SECURITY.md) (security model), and
+> [`docs/superpowers/plans/PROGRESS.md`](docs/superpowers/plans/PROGRESS.md) (canonical status ledger).
+
 ## Read the framework docs first
 
 @AGENTS.md
@@ -27,7 +31,7 @@ it in a Map — never by editing existing code.** The contracts live in `src/lib
 | Agent runtime | `src/lib/interfaces/agent-provider.ts` | `AGENT_REGISTRY` — `src/lib/agents/registry.ts` |
 | LLM provider | `src/lib/interfaces/llm-provider.ts` | `PROVIDER_REGISTRY` — `src/lib/llm/providers/index.ts` |
 | Canvas node | `src/lib/interfaces/canvas-node.ts` | `NODE_REGISTRY` — `src/lib/canvas/node-registry.ts` |
-| Tool | `src/lib/interfaces/tool-definition.ts` | (Phase 2) |
+| Tool | `src/lib/interfaces/tool-definition.ts` | `TOOL_REGISTRY` — `src/lib/tools/registry.ts` (registry + built-in tools exist; the agent tool-call loop is Phase 2) |
 | App event | `src/lib/interfaces/event-bus.ts` (`AppEvent` union) | `getEventBus()` — `src/lib/event-bus.ts` |
 | MCP store item | — | `MCP_CATALOG` — `src/lib/store/catalog.ts` |
 

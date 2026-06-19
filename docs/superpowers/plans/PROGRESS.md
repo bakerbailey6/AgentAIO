@@ -21,11 +21,11 @@
 | | |
 |---|---|
 | **Phase** | Phase 1 (Agent Shell) — **feature-complete, not yet hardened** |
-| **Verified baseline** | `npx vitest run` → **284 tests / 56 files passing** (observed 2026-06-18) |
-| **TypeScript** | Product code clean. ⚠️ `npx tsc --noEmit` reports **3 errors in test files only** (`db.test.ts`, `AddProviderForm.test.tsx`) — dynamic imports vs the `module` flag. Vitest passes regardless (own resolution). Minor config fix worth doing. |
-| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. Rust toolchain is not on system PATH (`C:\Users\chris\.cargo\bin`). |
+| **Verified baseline** | `npx vitest run` → **332 passing / 1 failing · 333 tests, 64 files** (observed 2026-06-18). ⚠️ The one failure is a **stale exhaustive assertion**: `src/lib/llm/providers/__tests__/index.test.ts:12` lists the provider keys but omits `'google'` (added to `PROVIDER_REGISTRY` without updating the test — the canonical CLAUDE.md registry-test gotcha). One-line fix: add `'google'` to the expected sorted array. |
+| **TypeScript** | Product code clean. ⚠️ `npx tsc --noEmit` reports a few errors in test files only — dynamic imports vs the `module` flag. Vitest passes regardless (own resolution). Minor config fix worth doing. |
+| **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. |
 | **Rust tests** | ⚠️ Blocked on this Windows host — see Known Risks. |
-| **Design spec** | [agent-command-center-design.md](specs/2026-06-18-agent-command-center-design.md) |
+| **Design spec** | [agent-command-center-design.md](../specs/2026-06-18-agent-command-center-design.md) |
 
 ---
 
@@ -55,6 +55,20 @@ All 15 tasks across the three Phase-1 plans are implemented and unit-tested.
 - ✅ Task 15 — Store panel — **MCP catalog only** (`src/components/store/`, `src/lib/store/catalog.ts`)
 
 ### Post-Phase-1 additions
+- ✅ **SQLCipher encryption at rest** (spec §9.2, PR #12). The app DB is keyed with a keychain-stored
+  256-bit passphrase (`vault-passphrase`) via native `vault_open`/`vault_execute`/`vault_select`
+  (`src-tauri/src/commands/vault.rs`), running `PRAGMA key` before migrations. `VaultGate`
+  (`src/components/vault/VaultGate.tsx`) gates the desktop app on unlock; web mode renders the
+  degraded shell directly. The app DB no longer uses `@tauri-apps/plugin-sql`.
+- ✅ **Google Gemini provider** (spec §7). `GoogleProvider` registered in `PROVIDER_REGISTRY`
+  (`src/lib/llm/providers/google.ts`) — Gemini 2.5 Pro / 2.5 Flash / 2.0 Flash, 1M context. The
+  "implement one interface, register it" extensibility smoke test. ⚠️ The exhaustive provider-keys
+  test was not updated alongside it — see the Snapshot failure note.
+- ✅ **Built-in tool tier** (spec §8.2). `ToolDefinition` registry (`TOOL_REGISTRY`,
+  `src/lib/tools/registry.ts`) with six built-in tools (`src/lib/tools/built-in/`): web_search,
+  file_read, file_write, shell, browser, image_generation — each guarded by `PermissionScope`. *Note:*
+  the registry + tools exist and are unit-tested, but the Phase-2 agent tool-call loop that resolves
+  and invokes them at runtime is not yet wired.
 - ✅ **Subscription "login" via official CLIs** — use Claude Pro/Max & ChatGPT Plus/Pro models in ordinary chat cards without an API key, routed through the `claude`/`codex` CLIs. New `claude-cli`/`codex-cli` providers build a `CliLanguageModel` (a hand-written `LanguageModelV2`) that shells out via the sidecar, so they flow through the existing router + LLM chat runtime unchanged. Adds `authType` on the provider contract, `isTauri()`, the Rust `run_process_blocking` command, and a "Subscription Sign-in" section in Settings. ⚠️ **Desktop-only and not yet exercised on a real `tauri:dev` run** — the per-CLI JSON line shapes and login flow are best-effort (see Known Risks). Google has no compliant subscription path (Anthropic OAuth is banned, Google's personal tier sunset) so it stays API-key only. *Follow-up:* the existing Claude Code / Codex coding-agent CLI flags are outdated (`codex --approval-mode suggest --quiet`, claude without `--include-partial-messages`) and were intentionally left untouched here — modernize them once the CLIs can be exercised live.
 
 ---
@@ -66,19 +80,17 @@ labels Phase 2/3. Roughly ordered by leverage. **Brainstorm scope before startin
 these** (`superpowers:brainstorming`), then write/execute a plan.
 
 ### A. Harden Phase 1 (close the gap to "actually shippable")
-1. **Verify the desktop app actually runs.** Add `C:\Users\chris\.cargo\bin` to PATH, run
-   `npm run tauri:dev`, and confirm the canvas, agent creation, and an LLM round-trip work
-   in the real Tauri window. This is the single biggest unknown — everything is unit-tested
-   but the integrated desktop binary has never been launched. See [Known Risks](#known-risks).
-2. **SQLCipher encryption at rest.** Spec §9.2 requires the SQLite DB encrypted via SQLCipher
-   with a passphrase unlock on launch. Current storage opens a plain `sqlite:acc.db`
-   (`src/lib/storage/db.ts`). Not yet implemented.
-3. **Tools & Skills store.** Store panel currently lists MCP servers only. Spec §8 wants
-   built-in tools (`ToolDefinition` registry) and per-agent skills (`~/.acc/skills/`). The
-   `ToolDefinition` interface exists but has no registry or built-in implementations.
-4. **Gemini provider.** Spec §7 lists Google Gemini; only Anthropic/OpenAI/Ollama are built.
-   Adding it is the canonical "implement one interface, register it" test of the extensibility
-   claim — good smoke test that the architecture holds.
+1. **Verify the desktop app actually runs.** Run `npm run tauri:dev` and confirm the vault unlock,
+   canvas, agent creation, and an LLM round-trip work in the real Tauri window. This is the single
+   biggest unknown — everything is unit-tested but the integrated desktop binary has never been
+   launched. See [Known Risks](#known-risks).
+2. **Fix the stale provider-keys test.** `src/lib/llm/providers/__tests__/index.test.ts:12` omits
+   `'google'` from the expected key set (added without updating the exhaustive assertion). One-line
+   fix; currently the only red test in the suite.
+3. **Wire the tool-call loop.** The `ToolDefinition` registry and the six §8.2 built-in tools exist
+   (`src/lib/tools/`), but no agent runtime resolves/invokes them yet — that's the Phase-2 tool loop.
+4. **Per-agent Skills.** Spec §8.3 wants per-agent skills (`~/.acc/skills/`) surfaced through the
+   store; the store currently covers MCP servers and the built-in tool tier.
 
 ### B. Phase 2 — Workflow Builder (spec §3.3)
    Visual node graph for chaining agents and tools. `workflows` table is already in the schema;
@@ -113,6 +125,12 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-18** — Documentation overhaul: rewrote `README.md` (badges, ToC, Mermaid
+  architecture/event-flow/vault-unlock diagrams, accurate 6-provider + tool-registry coverage);
+  added `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`; de-staled this ledger (SQLCipher, Gemini,
+  and the tool registry moved Done → recorded as shipped; "Next" trimmed). Re-ran the suite for an
+  honest baseline: **332 passing / 1 failing** (stale provider-keys assertion missing `'google'`).
+  Docs only — no product/source changes.
 - **2026-06-18** — Fixed broken desktop (Tauri) bundling: added `output: 'export'` to
   `next.config.ts` so `next build` emits the `out/` directory that `tauri.conf.json`'s
   `frontendDist: ../out` bundles (previously `next build` emitted `.next/`, so the desktop app
