@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { PROVIDER_REGISTRY, registerProvider } from '../index'
 import { AnthropicProvider } from '../anthropic'
+import { GoogleProvider } from '../google'
 import { OpenAIProvider } from '../openai'
 import { OllamaProvider } from '../ollama'
 import type { LLMProvider } from '@/lib/interfaces'
@@ -8,11 +9,12 @@ import type { LLMProvider } from '@/lib/interfaces'
 describe('PROVIDER_REGISTRY', () => {
   it('is a Map keyed by providerId', () => {
     expect(PROVIDER_REGISTRY).toBeInstanceOf(Map)
-    expect([...PROVIDER_REGISTRY.keys()].sort()).toEqual(['anthropic', 'ollama', 'openai'])
+    expect([...PROVIDER_REGISTRY.keys()].sort()).toEqual(['anthropic', 'google', 'ollama', 'openai'])
   })
 
   it('maps each key to the matching provider instance with the correct providerId', () => {
     expect(PROVIDER_REGISTRY.get('anthropic')).toBeInstanceOf(AnthropicProvider)
+    expect(PROVIDER_REGISTRY.get('google')).toBeInstanceOf(GoogleProvider)
     expect(PROVIDER_REGISTRY.get('openai')).toBeInstanceOf(OpenAIProvider)
     expect(PROVIDER_REGISTRY.get('ollama')).toBeInstanceOf(OllamaProvider)
 
