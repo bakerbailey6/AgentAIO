@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { normalizeGraph, validateGraph } from '@/lib/workflows/graph'
+import type { WorkflowNode, WorkflowEdge } from '@/lib/workflows/graph'
 
-const g = (nodes: any[], edges: any[] = []) => ({ nodes, edges })
+const g = (nodes: WorkflowNode[], edges: WorkflowEdge[] = []) => ({ nodes, edges })
 
 describe('workflow graph', () => {
   it('normalizes RF rows into typed graph', () => {

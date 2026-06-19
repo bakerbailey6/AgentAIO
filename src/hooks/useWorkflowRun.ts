@@ -32,10 +32,17 @@ function initialState(runId: string | null): WorkflowRunState {
 export function useWorkflowRun(runId: string | null): WorkflowRunState {
   const [state, setState] = useState<WorkflowRunState>(() => initialState(runId))
 
-  useEffect(() => {
-    // Reset whenever the watched run changes (including switching back to null).
+  // Reset whenever the watched run changes (including switching back to null).
+  // Done during render via the React "adjust state when a prop changes" pattern
+  // (compare against the previous `runId` held in state) so the returned state is
+  // already fresh on the same commit — no setState-inside-effect cascade.
+  const [trackedRunId, setTrackedRunId] = useState(runId)
+  if (trackedRunId !== runId) {
+    setTrackedRunId(runId)
     setState(initialState(runId))
+  }
 
+  useEffect(() => {
     if (!runId) return
 
     const bus = getEventBus()
