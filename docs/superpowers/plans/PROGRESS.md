@@ -20,8 +20,8 @@
 
 | | |
 |---|---|
-| **Phase** | Workflow Builder **W2 (control flow)** landed — `conditional` (branch via the engine's existing readiness pruning), `transform` (eval-free `{{path}}` templating), and `loop` (iterate a referenced sub-workflow, bounded) — **no engine change needed**. Remaining: Workflow Builder **W3** (data-wiring UX + run history), then **Autonomous Executor** (spec §3.3). |
-| **Verified baseline** | `npx vitest run` → **529 passing · 93 files** (observed 2026-06-19, post Workflow-Builder-W2; run from the worktree, not the main checkout). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`). Web-mode Playwright e2e → **5/5 pass**. `cargo test` (src-tauri) → **32 passing** (unchanged; W1/W2 added no Rust). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — a declared dependency repeatedly wiped by `git worktree remove --force` deleting *through* agent worktrees' `node_modules` junctions (restore with `npm ci` + `npm install --no-save @ai-sdk/google@3.0.83`; don't `--force`-remove junction-bearing worktrees). |
+| **Phase** | **Workflow Builder COMPLETE (W1+W2+W3)** — visual node graph (start/agent/tool/output/join + conditional/transform/loop), in-process readiness engine (sequential/parallel/join; conditional & loop ride on it with no engine special-casing), dedicated React Flow editor with port-type validation + run history + re-run, under the **Workflows** nav. **Only remaining roadmap item: the Autonomous Executor** (spec §3.3 — needs its own design pass). |
+| **Verified baseline** | `npx vitest run` → **548 passing · 95 files** (observed 2026-06-19, post Workflow-Builder-W3; run from the worktree, not the main checkout). `npx tsc --noEmit` → **clean (exit 0)**. `npm run build` → static export OK (`out/index.html`). Web-mode Playwright e2e → **5/5 pass**. `cargo test` (src-tauri) → **32 passing** (unchanged; the Workflow Builder added no Rust). Note: running the suite locally requires `@ai-sdk/google` present in `node_modules` — a declared dependency repeatedly wiped by `git worktree remove --force` deleting *through* agent worktrees' `node_modules` junctions (restore with `npm ci` + `npm install --no-save @ai-sdk/google@3.0.83`; don't `--force`-remove junction-bearing worktrees). |
 | **TypeScript** | Product code clean; `npx tsc --noEmit` exits 0. (Fixed: `GoogleProvider` was missing the required `authType` field — a build-breaker surfaced once `@ai-sdk/google` resolves.) |
 | **Desktop app run** | ⚠️ **Never verified end-to-end.** `npm run tauri:dev` has not been run on a real host. The LLM-agent no-response fix, the Phase 3–5 runtime (tool calls, real file/shell execution, approval round-trips, MCP connect), and Workflow Builder W1 (persist/list/run a workflow — needs the SQLite vault + a real agent node) all need a real desktop round-trip to confirm. |
 | **Rust tests** | ✅ `cargo test` (src-tauri) green — **32 passing** (AppHandle-free helpers, incl. the new `fs.rs` path-guard tests). MockRuntime command-level tests stay behind the `mock-runtime-tests` feature (off on this host). |
@@ -152,6 +152,17 @@ after Phase 2.
 
 ## Changelog
 
+- **2026-06-19** — **Workflow Builder W3 landed: data-wiring UX + run history** (plan
+  [`2026-06-19-workflow-builder-w3.md`](2026-06-19-workflow-builder-w3.md); 2 parallel worktree tasks +
+  a thin editor integration, each Tier-1 QA'd; the editor change got a dedicated adversarial QA). New
+  `src/lib/workflows/port-compat.ts` (pure, lenient port-type compatibility) gates the editor's
+  `onConnect` so incompatible wires are rejected with a notice; new `WorkflowRunHistory` component lists
+  past runs from `workflow_runs` (`findByWorkflowId`) with a **Re-run**; `WorkflowEditor` gained a History
+  toggle + a single `runWith(input)` run path (shared by the Run modal and re-run) that bumps a
+  `historyKey` to refresh. **This completes the Workflow Builder (W1+W2+W3).** Verified: `npx tsc --noEmit`
+  clean; `npx vitest run` → **548 passing / 95 files** (+19); `eslint` on changed files → no errors;
+  `npm run build` → `out/` emitted; the four pre-existing registry tests untouched. The DB-backed run list
+  + real execution remain desktop-gated. Remaining roadmap: **Autonomous Executor** (spec §3.3).
 - **2026-06-19** — **Workflow Builder W2 landed: control flow** (plan
   [`2026-06-19-workflow-builder-w2.md`](2026-06-19-workflow-builder-w2.md); built by 4 parallel worktree
   tasks + a foundational `expr.ts` done inline, each Tier-1 QA'd; the `loop` node got a dedicated
