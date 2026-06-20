@@ -70,11 +70,13 @@ export default function Home() {
               setAgents((prev) => [...prev, row])
               // do NOT setShowCreateAgent(false) here — onClose handles that
             }}
+            onNavigateToSettings={() => { setShowCreateAgent(false); setActiveNav('settings') }}
           />
           <ChatPanel agentId={chatAgentId} onClose={() => setChatAgentId(null)} />
           {editAgentId && (
             <EditAgentPanel agentId={editAgentId} onClose={() => setEditAgentId(null)}
-              onSaved={(row) => setAgents((prev) => prev.map((a) => (a.id === row.id ? row : a)))} />
+              onSaved={(row) => setAgents((prev) => prev.map((a) => (a.id === row.id ? row : a)))}
+              onNavigateToSettings={() => { setEditAgentId(null); setActiveNav('settings') }} />
           )}
         </div>
         <StatusBar

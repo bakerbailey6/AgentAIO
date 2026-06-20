@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import CreateAgentPanel from '../CreateAgentPanel'
+import { ModelRepository } from '@/lib/storage'
 
 const mockDb = {
   execute: vi.fn(async () => ({ rowsAffected: 1 })),
@@ -58,5 +59,25 @@ describe('CreateAgentPanel', () => {
       expect(onCreated).toHaveBeenCalledWith(mockRow)
       expect(onClose).toHaveBeenCalled()
     })
+  })
+
+  it('routes to Settings when the empty-model link is clicked', async () => {
+    // No models configured → the LLM type shows the "add one in Settings" link.
+    // Mock-with-`new` must be a `function` (never an arrow), or it is "not a constructor".
+    vi.mocked(ModelRepository).mockImplementationOnce(function () {
+      return { findAll: vi.fn(async () => []) } as unknown as ModelRepository
+    })
+    const onNavigateToSettings = vi.fn()
+    render(
+      <CreateAgentPanel
+        open={true}
+        onClose={onClose}
+        onCreated={onCreated}
+        onNavigateToSettings={onNavigateToSettings}
+      />,
+    )
+    const link = await screen.findByText(/add one in settings/i)
+    fireEvent.click(link)
+    expect(onNavigateToSettings).toHaveBeenCalledTimes(1)
   })
 })

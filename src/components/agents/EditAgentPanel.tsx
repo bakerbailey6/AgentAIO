@@ -16,12 +16,14 @@ interface EditAgentPanelProps {
   agentId: string
   onClose: () => void
   onSaved: (row: AgentRow) => void
+  /** Navigate to the Settings panel (used by the empty-model link). */
+  onNavigateToSettings?: () => void
 }
 
 /** Prefix marking a skill assignment inside the agent's `tool_ids`. */
 const SKILL_PREFIX = 'skill:'
 
-export default function EditAgentPanel({ agentId, onClose, onSaved }: EditAgentPanelProps) {
+export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateToSettings }: EditAgentPanelProps) {
   const [name, setName] = useState('')
   const [models, setModels] = useState<ModelRow[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
@@ -142,7 +144,16 @@ export default function EditAgentPanel({ agentId, onClose, onSaved }: EditAgentP
             Model
           </label>
           {models.length === 0 ? (
-            <p className="text-[12px] text-zinc-500">No models configured</p>
+            <p className="text-[12px] text-zinc-500">
+              No models configured —{' '}
+              <button
+                type="button"
+                onClick={() => onNavigateToSettings?.()}
+                className="text-indigo-400 cursor-pointer hover:text-indigo-300"
+              >
+                add one in Settings
+              </button>
+            </p>
           ) : (
             <select
               value={selectedModelId ?? ''}

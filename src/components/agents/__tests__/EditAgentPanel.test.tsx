@@ -96,6 +96,22 @@ describe('EditAgentPanel', () => {
     })
   })
 
+  it('routes to Settings when the empty-model link is clicked', async () => {
+    spies.modelFindAll.mockResolvedValue([])
+    const onNavigateToSettings = vi.fn()
+    render(
+      <EditAgentPanel
+        agentId="agent-1"
+        onClose={onClose}
+        onSaved={onSaved}
+        onNavigateToSettings={onNavigateToSettings}
+      />,
+    )
+    const link = await screen.findByText(/add one in settings/i)
+    fireEvent.click(link)
+    expect(onNavigateToSettings).toHaveBeenCalledTimes(1)
+  })
+
   it('saves and calls onSaved with the refetched row then onClose', async () => {
     render(<EditAgentPanel agentId="agent-1" onClose={onClose} onSaved={onSaved} />)
     // Wait for initial load.

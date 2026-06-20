@@ -8,6 +8,8 @@ interface CreateAgentPanelProps {
   open: boolean
   onClose: () => void
   onCreated: (row: AgentRow) => void
+  /** Navigate to the Settings panel (used by the empty-model link). */
+  onNavigateToSettings?: () => void
 }
 
 type AgentType = 'llm' | 'coding-agent' | 'custom'
@@ -18,7 +20,7 @@ const AGENT_TYPES: { label: string; value: AgentType }[] = [
   { label: 'Codex', value: 'custom' },
 ]
 
-export default function CreateAgentPanel({ open, onClose, onCreated }: CreateAgentPanelProps) {
+export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateToSettings }: CreateAgentPanelProps) {
   const [name, setName] = useState('')
   const [agentType, setAgentType] = useState<AgentType>('llm')
   const [models, setModels] = useState<ModelRow[]>([])
@@ -145,9 +147,13 @@ export default function CreateAgentPanel({ open, onClose, onCreated }: CreateAge
             {models.length === 0 ? (
               <p className="text-[12px] text-zinc-500">
                 No models configured —{' '}
-                <span className="text-indigo-400 cursor-pointer hover:text-indigo-300">
+                <button
+                  type="button"
+                  onClick={() => onNavigateToSettings?.()}
+                  className="text-indigo-400 cursor-pointer hover:text-indigo-300"
+                >
                   add one in Settings
-                </span>
+                </button>
               </p>
             ) : (
               <select
