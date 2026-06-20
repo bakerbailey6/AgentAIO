@@ -14,11 +14,11 @@ use std::sync::{Arc, Mutex};
 
 /// Build and run the Tauri application.
 ///
-/// Registers the SQL plugin, sets up the shared map of spawned child processes
-/// as managed state, and wires up every command exposed to the front end.
+/// Sets up the shared map of spawned child processes as managed state, and wires
+/// up every command exposed to the front end. The app DB is opened directly
+/// through the native `vault_*` (SQLCipher) commands — not a SQL plugin.
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .manage(Arc::new(Mutex::new(HashMap::<String, std::process::Child>::new())))
         .manage::<VaultState>(Arc::new(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
