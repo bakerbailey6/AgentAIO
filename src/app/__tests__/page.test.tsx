@@ -65,6 +65,11 @@ vi.mock('@/components/store/StorePanel', () => ({
     <div data-testid="store"><button aria-label="close-store" onClick={p.onClose} /></div>
   ),
 }))
+vi.mock('@/components/workflows/WorkflowsPanel', () => ({
+  WorkflowsPanel: (p: { onClose: () => void }) => (
+    <div data-testid="workflows"><button aria-label="close-workflows" onClick={p.onClose} /></div>
+  ),
+}))
 vi.mock('@/components/agents/CreateAgentPanel', () => ({
   default: (p: { open: boolean }) => (p.open ? <div data-testid="create-agent" /> : null),
 }))
@@ -116,6 +121,7 @@ describe('Home (page.tsx) integration', () => {
     render(<Home />)
     expect(screen.queryByTestId('settings')).not.toBeInTheDocument()
     expect(screen.queryByTestId('store')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('workflows')).not.toBeInTheDocument()
     expect(screen.queryByTestId('chat')).not.toBeInTheDocument()
     expect(screen.queryByTestId('create-agent')).not.toBeInTheDocument()
     expect(screen.queryByTestId('edit-agent')).not.toBeInTheDocument()
@@ -135,6 +141,14 @@ describe('Home (page.tsx) integration', () => {
     expect(screen.getByTestId('store')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('close-store'))
     await waitFor(() => expect(screen.queryByTestId('store')).not.toBeInTheDocument())
+  })
+
+  it('opens and closes the Workflows panel via the sidebar', async () => {
+    render(<Home />)
+    fireEvent.click(screen.getByLabelText('Workflows'))
+    expect(screen.getByTestId('workflows')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('close-workflows'))
+    await waitFor(() => expect(screen.queryByTestId('workflows')).not.toBeInTheDocument())
   })
 
   it('opens the Create Agent panel from the + New Agent button', () => {

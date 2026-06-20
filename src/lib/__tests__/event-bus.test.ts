@@ -44,4 +44,24 @@ describe('createEventBus', () => {
     expect(h1).toHaveBeenCalledOnce()
     expect(h2).toHaveBeenCalledOnce()
   })
+
+  it('delivers workflow:node-status events to their listener', () => {
+    const bus = createEventBus()
+    const handler = vi.fn()
+    bus.on('workflow:node-status', handler)
+    bus.emit({ type: 'workflow:node-status', runId: 'r1', nodeId: 'n1', status: 'running', timestamp: Date.now() })
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'workflow:node-status', runId: 'r1', nodeId: 'n1', status: 'running' }),
+    )
+  })
+
+  it('delivers workflow:run-finished events to their listener', () => {
+    const bus = createEventBus()
+    const handler = vi.fn()
+    bus.on('workflow:run-finished', handler)
+    bus.emit({ type: 'workflow:run-finished', runId: 'r1', status: 'done', result: { ok: true }, timestamp: Date.now() })
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'workflow:run-finished', runId: 'r1', status: 'done' }),
+    )
+  })
 })

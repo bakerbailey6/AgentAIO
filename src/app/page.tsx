@@ -6,6 +6,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { AgentCanvas } from '@/components/canvas/AgentCanvas'
 import { StorePanel } from '@/components/store/StorePanel'
+import { WorkflowsPanel } from '@/components/workflows/WorkflowsPanel'
 import SettingsPanel from '@/components/settings/SettingsPanel'
 import CreateAgentPanel from '@/components/agents/CreateAgentPanel'
 import EditAgentPanel from '@/components/agents/EditAgentPanel'
@@ -61,6 +62,7 @@ export default function Home() {
           />
           {activeNav === 'store' && <StorePanel onClose={() => setActiveNav('home')} />}
           {activeNav === 'settings' && <SettingsPanel onClose={() => setActiveNav('home')} />}
+          {activeNav === 'workflows' && <WorkflowsPanel onClose={() => setActiveNav('home')} />}
           <CreateAgentPanel
             open={showCreateAgent}
             onClose={() => setShowCreateAgent(false)}
