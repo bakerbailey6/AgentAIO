@@ -153,7 +153,14 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
       const session: AgentSession = {
         id: currentSessionId,
         agentId: currentAgentId,
-        permissionScope: { allowedPaths: [], allowedDomains: [], shellEnabled: false },
+        // Coding-agent runtimes (Claude Code / Codex) require a working directory;
+        // their file/shell tools are scoped to it.
+        projectDirectory: agentRow.projectDirectory ?? undefined,
+        permissionScope: {
+          allowedPaths: agentRow.projectDirectory ? [agentRow.projectDirectory] : [],
+          allowedDomains: [],
+          shellEnabled: agentRow.type !== 'llm',
+        },
       }
 
       // Emit running status

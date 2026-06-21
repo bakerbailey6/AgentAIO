@@ -49,9 +49,11 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
     if (!session.projectDirectory) {
       throw new Error(`${this.displayName} requires a project directory`)
     }
+    // `--print --output-format stream-json` now REQUIRES `--verbose`; partial
+    // messages give us incremental text deltas to stream into the UI.
     const processId = await invoke<string>('spawn_process', {
       cmd: 'claude',
-      args: ['--print', '--output-format', 'stream-json', input],
+      args: ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages', input],
       cwd: session.projectDirectory,
     })
     this.processes.set(session.id, processId)
@@ -63,15 +65,26 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
     const unlisten = await listen<string>(`process://stdout/${processId}`, (event) => {
       try {
         const line = JSON.parse(event.payload)
+        // Incremental text: stream_event -> content_block_delta -> text_delta.
+        if (line.type === 'stream_event') {
+          const delta = line.event?.delta
+          if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+            eventQueue.push({
+              type: 'text-delta',
+              agentId: session.agentId,
+              timestamp: Date.now(),
+              payload: { delta: delta.text },
+            })
+          }
+          return
+        }
+        // The CLI's own tool use surfaces as approval requests over stdin.
         if (line.type === 'approval-request' && line.requestId) {
           this.approvalSessions.set(line.requestId, session.id)
+          eventQueue.push({ type: 'approval-request', agentId: session.agentId, timestamp: Date.now(), payload: line })
+          return
         }
-        eventQueue.push({
-          type: line.type === 'assistant' ? 'text-delta' : line.type === 'approval-request' ? 'approval-request' : 'tool-call',
-          agentId: session.agentId,
-          timestamp: Date.now(),
-          payload: line,
-        })
+        // Terminal line.
         if (line.type === 'result') done = true
       } catch {
         // non-JSON line, skip

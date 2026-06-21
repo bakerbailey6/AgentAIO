@@ -17,6 +17,8 @@ export interface AgentRow {
   type: 'llm' | 'coding-agent' | 'custom'
   modelId: string | null
   systemPrompt: string
+  /** Working directory for coding-agent runtimes (Claude Code / Codex). */
+  projectDirectory: string | null
   toolIds: string[]
   mcpIds: string[]
   canvasX: number
@@ -30,6 +32,7 @@ interface AgentInsert {
   type: 'llm' | 'coding-agent' | 'custom'
   modelId?: string | null
   systemPrompt?: string
+  projectDirectory?: string | null
   toolIds?: string[]
   mcpIds?: string[]
   canvasX?: number
@@ -44,14 +47,15 @@ export class AgentRepository {
   async create(data: AgentInsert): Promise<string> {
     const id = crypto.randomUUID()
     await this.db.execute(
-      `INSERT INTO agents (id, name, type, model_id, system_prompt, tool_ids, mcp_ids, canvas_x, canvas_y, group_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO agents (id, name, type, model_id, system_prompt, project_directory, tool_ids, mcp_ids, canvas_x, canvas_y, group_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         id,
         data.name,
         data.type ?? 'llm',
         data.modelId ?? null,
         data.systemPrompt ?? '',
+        data.projectDirectory ?? null,
         JSON.stringify(data.toolIds ?? []),
         JSON.stringify(data.mcpIds ?? []),
         data.canvasX ?? 0,
@@ -108,7 +112,7 @@ export class AgentRepository {
    */
   async update(
     id: string,
-    patch: { name?: string; modelId?: string | null; systemPrompt?: string },
+    patch: { name?: string; modelId?: string | null; systemPrompt?: string; projectDirectory?: string | null },
   ): Promise<void> {
     const sets: string[] = []
     const params: unknown[] = []
@@ -123,6 +127,10 @@ export class AgentRepository {
     if ('systemPrompt' in patch) {
       sets.push(`system_prompt = $${params.length + 1}`)
       params.push(patch.systemPrompt)
+    }
+    if ('projectDirectory' in patch) {
+      sets.push(`project_directory = $${params.length + 1}`)
+      params.push(patch.projectDirectory)
     }
     if (sets.length === 0) return
     params.push(id)
@@ -145,6 +153,7 @@ export class AgentRepository {
       type: row.type as AgentRow['type'],
       modelId: row.model_id as string | null,
       systemPrompt: row.system_prompt as string,
+      projectDirectory: (row.project_directory as string | null) ?? null,
       toolIds: JSON.parse(row.tool_ids as string),
       mcpIds: JSON.parse(row.mcp_ids as string),
       canvasX: row.canvas_x as number,

@@ -25,9 +25,11 @@ const SKILL_PREFIX = 'skill:'
 
 export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateToSettings }: EditAgentPanelProps) {
   const [name, setName] = useState('')
+  const [agentType, setAgentType] = useState<AgentRow['type']>('llm')
   const [models, setModels] = useState<ModelRow[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [projectDirectory, setProjectDirectory] = useState('')
   const [tools, setTools] = useState<{ id: string; name: string }[]>([])
   const [mcps, setMcps] = useState<{ id: string; name: string }[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
@@ -54,8 +56,10 @@ export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateTo
         setSkills(skillRows)
         if (agent) {
           setName(agent.name)
+          setAgentType(agent.type)
           setSelectedModelId(agent.modelId)
           setSystemPrompt(agent.systemPrompt)
+          setProjectDirectory(agent.projectDirectory ?? '')
           setSelectedToolIds(
             agent.toolIds.filter((id) => !id.startsWith(SKILL_PREFIX)),
           )
@@ -93,6 +97,7 @@ export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateTo
         name: name.trim(),
         modelId: selectedModelId ?? null,
         systemPrompt,
+        projectDirectory: agentType === 'llm' ? null : (projectDirectory.trim() || null),
       })
       await agentRepo.updateToolIds(agentId, [...selectedToolIds, ...skillIds])
       await agentRepo.updateMcpIds(agentId, selectedMcpIds)
@@ -137,6 +142,23 @@ export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateTo
             className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-zinc-200 focus:outline-none focus:border-indigo-500/50 placeholder:text-zinc-600"
           />
         </div>
+
+        {/* Project Directory (coding agents only) */}
+        {agentType !== 'llm' && (
+          <div className="px-5 py-4 border-b border-white/[0.05]">
+            <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+              Project Directory
+            </label>
+            <input
+              type="text"
+              value={projectDirectory}
+              onChange={(e) => setProjectDirectory(e.target.value)}
+              placeholder="/path/to/project"
+              className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-zinc-200 focus:outline-none focus:border-indigo-500/50 placeholder:text-zinc-600"
+            />
+            <p className="text-[11px] text-zinc-500 mt-1">The working directory the coding agent runs in.</p>
+          </div>
+        )}
 
         {/* Model */}
         <div className="px-5 py-4 border-b border-white/[0.05]">

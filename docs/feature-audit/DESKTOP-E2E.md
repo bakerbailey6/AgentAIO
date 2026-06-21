@@ -43,16 +43,19 @@ exercised through the app's own `claude-cli` provider. No API keys are harvested
 - ✅ Navigation, Settings, **add real Claude model**, create/edit agent, **persistence across reload** (encrypted DB), Store tool install+assign, workflow create+persist.
 - ✅ **Real LLM agent functionality**: `claude-cli` provider → `CliLanguageModel` → Tauri process sidecar → real `claude` CLI → streamed **"PONG"** into the chat UI.
 
-### Confirmed bugs (see `user-stories.csv`)
-- **US-089 / US-090 — Claude Code & Codex agents are non-functional from the UI.** Chatting yields
-  `Error: Claude Code requires a project directory`. There is no `projectDirectory` field on
-  `AgentRow`, no input in Create/Edit, and `ChatPanel` builds the session without one. Additionally
-  the runtime's CLI flags are stale (`claude --print --output-format stream-json` now requires
-  `--verbose`).
-- **US-088 — the LLM tool-call loop can't be exercised end-to-end** here: `ChatPanel` hardcodes
-  `permissionScope { allowedPaths: [], shellEnabled: false }`, so file/shell tools are always denied,
-  and the only live model available (`claude-cli`) is text-only in this app's loop (emits no
-  tool-call parts). A tool-capable API key + per-agent permission wiring are needed.
+### Bugs found — and fixed this pass (see `user-stories.csv`)
+- **US-089 — Claude Code agent was non-functional from the UI → FIXED & VERIFIED.** It used to throw
+  `Error: Claude Code requires a project directory`. Fix: added `projectDirectory` to the agents
+  schema/repo + Create/Edit panels + the `ChatPanel` session, and corrected the stale CLI flags
+  (`--print --verbose --output-format stream-json --include-partial-messages`) and the `stream_event`
+  text parsing. **Re-verified on the real binary:** a Claude Code agent with a project directory now
+  returns a real response (`HELLO`) — no error (`/tmp/shot-claudecode-fixed.png`).
+- **US-090 — Codex agent** shares the same `projectDirectory` plumbing fix, but can't be live-verified
+  here (the `codex` CLI isn't installed).
+- **US-088 — LLM tool-call loop.** `ChatPanel` no longer hardcodes an empty `permissionScope`; it now
+  derives `allowedPaths` from the project directory and enables shell for coding agents. The full
+  LLM-driven loop still can't be demonstrated live (the only available model, `claude-cli`, is
+  text-only in this app's loop — a tool-capable API key is needed).
 
 ### Genuine environmental limits (no compromise possible without resources)
 - **OpenAI / Google / Ollama / Codex** providers cannot be live-tested: no API keys and no

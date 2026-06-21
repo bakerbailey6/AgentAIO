@@ -26,6 +26,7 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
   const [models, setModels] = useState<ModelRow[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [projectDirectory, setProjectDirectory] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [nameError, setNameError] = useState(false)
 
@@ -35,6 +36,7 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
     setName('')
     setAgentType('llm')
     setSystemPrompt('')
+    setProjectDirectory('')
     setNameError(false)
 
     initDb()
@@ -63,6 +65,7 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
         type: agentType,
         modelId: agentType === 'llm' ? (selectedModelId ?? null) : null,
         systemPrompt: agentType === 'llm' ? systemPrompt.trim() : '',
+        projectDirectory: agentType === 'llm' ? null : (projectDirectory.trim() || null),
         toolIds: [],
         mcpIds: [],
         canvasX: 120,
@@ -137,6 +140,23 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
             ))}
           </div>
         </div>
+
+        {/* Project Directory (coding agents only) */}
+        {agentType !== 'llm' && (
+          <div className="px-5 py-4 border-b border-white/[0.05]">
+            <label className="block text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+              Project Directory
+            </label>
+            <input
+              type="text"
+              value={projectDirectory}
+              onChange={(e) => setProjectDirectory(e.target.value)}
+              placeholder="/path/to/project"
+              className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-zinc-200 focus:outline-none focus:border-indigo-500/50 placeholder:text-zinc-600"
+            />
+            <p className="text-[11px] text-zinc-500 mt-1">Required — the working directory the coding agent runs in.</p>
+          </div>
+        )}
 
         {/* Model (LLM only) */}
         {agentType === 'llm' && (

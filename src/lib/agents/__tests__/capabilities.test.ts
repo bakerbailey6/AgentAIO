@@ -52,6 +52,7 @@ function makeAgent(overrides: Partial<AgentRow> = {}): AgentRow {
     type: 'llm',
     modelId: 'm1',
     systemPrompt: '',
+    projectDirectory: null,
     toolIds: [],
     mcpIds: [],
     canvasX: 0,
