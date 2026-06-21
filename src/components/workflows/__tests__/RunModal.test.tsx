@@ -41,4 +41,19 @@ describe('RunModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('clears the Start input on Cancel so it cannot leak into the next open', () => {
+    render(<RunModal open onClose={vi.fn()} onRun={vi.fn()} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'previous run input' } })
+    expect(screen.getByRole('textbox')).toHaveValue('previous run input')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('textbox')).toHaveValue('')
+  })
+
+  it('clears the Start input after a Run', () => {
+    render(<RunModal open onClose={vi.fn()} onRun={vi.fn()} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    expect(screen.getByRole('textbox')).toHaveValue('')
+  })
 })

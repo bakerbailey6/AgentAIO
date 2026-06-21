@@ -36,6 +36,23 @@ describe('AddProviderForm', () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('set_secret', expect.objectContaining({ key: 'anthropic-key' })))
   })
 
+  it('disables Save until a non-empty API key is entered', () => {
+    render(<AddProviderForm onSaved={onSaved} onCancel={onCancel} />)
+    const save = screen.getByText('Save') as HTMLButtonElement
+    // Anthropic (default) with no key -> Save disabled.
+    expect(save.disabled).toBe(true)
+    fireEvent.change(screen.getByPlaceholderText(/api key/i), { target: { value: '   ' } })
+    expect(save.disabled).toBe(true)
+    fireEvent.change(screen.getByPlaceholderText(/api key/i), { target: { value: 'sk-real' } })
+    expect(save.disabled).toBe(false)
+  })
+
+  it('allows Save for Ollama without an API key', () => {
+    render(<AddProviderForm onSaved={onSaved} onCancel={onCancel} />)
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ollama' } })
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('shows connection result on test', async () => {
     render(<AddProviderForm onSaved={onSaved} onCancel={onCancel} />)
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'anthropic' } })

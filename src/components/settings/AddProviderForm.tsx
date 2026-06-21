@@ -123,7 +123,7 @@ export default function AddProviderForm({ onSaved, onCancel }: AddProviderFormPr
       <div className="flex gap-2 pt-1">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || (!isOllama && !apiKey.trim())}
           className="bg-white text-[#09090b] text-[12px] font-semibold rounded-lg px-3 py-1.5 hover:bg-zinc-100 transition-colors disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save'}

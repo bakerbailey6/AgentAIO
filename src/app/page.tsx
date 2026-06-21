@@ -14,25 +14,49 @@ import ChatPanel from '@/components/chat/ChatPanel'
 import { VaultGate } from '@/components/vault/VaultGate'
 import { useApprovals } from '@/hooks/useApprovals'
 import { useAgentCounts } from '@/hooks/useAgentCounts'
-import { initDb, AgentRepository } from '@/lib/storage'
+import { initDb, AgentRepository, SessionRepository, ToolRepository } from '@/lib/storage'
 import { ModelRepository } from '@/lib/storage/repositories/models'
 import type { AgentRow } from '@/lib/storage'
 
+type NavItem = 'home' | 'chat' | 'workflows' | 'store' | 'settings'
+
 export default function Home() {
-  const [activeNav, setActiveNav] = useState<'home' | 'chat' | 'workflows' | 'store' | 'settings'>('home')
+  const [activeNav, setActiveNav] = useState<NavItem>('home')
   const [showCreateAgent, setShowCreateAgent] = useState(false)
   const [agents, setAgents] = useState<AgentRow[]>([])
   const [chatAgentId, setChatAgentId] = useState<string | null>(null)
+  const [lastChatAgentId, setLastChatAgentId] = useState<string | null>(null)
   const [editAgentId, setEditAgentId] = useState<string | null>(null)
   const approvals = useApprovals()
   const { running, idle } = useAgentCounts()
   const [modelsConnected, setModelsConnected] = useState(0)
+  const [toolsActive, setToolsActive] = useState(0)
+  const [llmCalls, setLlmCalls] = useState(0)
+  const [estimatedCost, setEstimatedCost] = useState(0)
 
   const handleOpenChat = useCallback((agentId: string) => {
     setChatAgentId(agentId)
+    setLastChatAgentId(agentId)
   }, [])
 
   const handleEditAgent = useCallback((agentId: string) => setEditAgentId(agentId), [])
+
+  // The "Chat" sidebar item is a per-agent overlay, not a standalone panel.
+  // Opening it should resume the most recent (or first) agent's chat; with no
+  // agents yet, guide the user to create one instead of dead-ending.
+  const handleNavigate = useCallback((item: NavItem) => {
+    if (item === 'chat') {
+      const target = chatAgentId ?? lastChatAgentId ?? agents[0]?.id ?? null
+      if (target) {
+        setChatAgentId(target)
+        setLastChatAgentId(target)
+      } else {
+        setShowCreateAgent(true)
+      }
+      return
+    }
+    setActiveNav(item)
+  }, [chatAgentId, lastChatAgentId, agents])
 
   useEffect(() => {
     initDb()
@@ -48,10 +72,36 @@ export default function Home() {
       .catch(() => {})
   }, [])
 
+  // Footer usage metrics — derived from real persisted state (loaded on mount)
+  // rather than the previous hardcoded zeros. `toolsActive` = installed tools;
+  // `llmCalls` = recorded assistant turns across sessions; `estimatedCost` =
+  // summed per-session cost estimate.
+  useEffect(() => {
+    initDb()
+      .then(db => new ToolRepository(db).findAll())
+      .then(rows => setToolsActive(rows.length))
+      .catch(() => {})
+    initDb()
+      .then(db => new SessionRepository(db).findAll())
+      .then(sessions => {
+        let calls = 0
+        let cost = 0
+        for (const s of sessions) {
+          cost += s.costEstimate ?? 0
+          for (const m of s.messages ?? []) {
+            if ((m as { role?: string }).role === 'assistant') calls++
+          }
+        }
+        setLlmCalls(calls)
+        setEstimatedCost(cost)
+      })
+      .catch(() => {})
+  }, [agents, chatAgentId])
+
   return (
     <VaultGate>
     <div className="flex h-screen w-screen overflow-hidden">
-      <Sidebar activeItem={activeNav} onNavigate={setActiveNav} />
+      <Sidebar activeItem={activeNav} onNavigate={handleNavigate} />
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar approvalCount={approvals.length} onAddAgent={() => setShowCreateAgent(true)} />
         <div className="flex-1 relative overflow-hidden">
@@ -83,10 +133,10 @@ export default function Home() {
           runningCount={running}
           idleCount={idle}
           approvalCount={approvals.length}
-          llmCallsToday={0}
-          estimatedCost={0}
+          llmCallsToday={llmCalls}
+          estimatedCost={estimatedCost}
           modelsConnected={modelsConnected}
-          toolsActive={0}
+          toolsActive={toolsActive}
         />
       </div>
     </div>

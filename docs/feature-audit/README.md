@@ -27,6 +27,27 @@ plus its status through a four-phase audit.
 | Fix Applied | The fix made in Phase 3 |
 | Retest Result | Phase-4 re-verification result |
 
+## Audit results (this pass)
+
+**Baseline gates:** `tsc` clean · Vitest **554 passing / 95 files** · `npm run build` static-export OK ·
+Playwright web e2e **4/4** · `cargo test` **29/32** (the 3 keychain tests fail only because this
+headless CI container has no Secret Service/D-Bus — environment, not code).
+
+**6 logistical/UX bugs found in Phase 2 and fixed in Phase 3 (all re-verified in Phase 4):**
+
+| Story | Bug | Fix |
+|---|---|---|
+| US-002 | Sidebar **Chat** nav was a dead-end (highlighted, opened nothing) | `handleNavigate` resumes the most-recent/first agent chat, or opens Create Agent when none exist |
+| US-009 | StatusBar **LLM calls / cost / tools** were hardcoded `0` | Wired to real persisted state (tools count, assistant turns, summed session cost) |
+| US-047 | **Add Provider** could save an empty API key | Save disabled until a non-empty key (Ollama exempt) |
+| US-050 | Configured **Google** provider showed raw id `google` | Added `google → "Google Gemini"` to the third display-name map |
+| US-059 | Custom **MCP** added via footer was saved but never rendered | Footer routes through `useInstalledMcps.addCustom`; custom rows now render |
+| US-070 | **Run workflow** modal leaked the previous run's input | Start input cleared on every Run/Cancel/close path |
+
+**Known, out-of-scope items (documented, not fixed):** web-mode `invoke` console noise (desktop is the
+real target; web is intentionally degraded) and the codebase-wide `react-hooks/set-state-in-effect`
+lint hints (code-health, not user-facing behavior — left untouched to avoid broad regression risk).
+
 ## How testing maps to this environment
 
 This is a Tauri 2 + Next.js app. The remote CI container can run the **web-mode** surface and
