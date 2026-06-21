@@ -159,7 +159,9 @@ export default function ChatPanel({ agentId, onClose }: ChatPanelProps) {
         permissionScope: {
           allowedPaths: agentRow.projectDirectory ? [agentRow.projectDirectory] : [],
           allowedDomains: [],
-          shellEnabled: agentRow.type !== 'llm',
+          // A configured workspace grants shell access (repo work needs git/build);
+          // coding-agent runtimes always get it.
+          shellEnabled: !!agentRow.projectDirectory || agentRow.type !== 'llm',
         },
       }
 

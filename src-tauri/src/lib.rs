@@ -8,7 +8,7 @@ use commands::keychain::{delete_secret, get_secret, set_secret};
 use commands::vault::{vault_execute, vault_open, vault_select, VaultState};
 use commands::process::{kill_process, run_process_blocking, send_stdin, spawn_process};
 use commands::skills::{list_skills, read_skill, write_skill};
-use commands::fs::{fs_read_text, fs_write_text};
+use commands::fs::{fs_glob, fs_grep, fs_list_directory, fs_read_text, fs_write_text};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 /// through the native `vault_*` (SQLCipher) commands — not a SQL plugin.
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(Mutex::new(HashMap::<String, std::process::Child>::new())))
         .manage::<VaultState>(Arc::new(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
@@ -27,6 +28,7 @@ pub fn run() {
             spawn_process, kill_process, send_stdin, run_process_blocking,
             list_skills, read_skill, write_skill,
             fs_read_text, fs_write_text,
+            fs_list_directory, fs_glob, fs_grep,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -7,9 +7,13 @@ import type { ToolDefinition, ToolContext } from '@/lib/interfaces'
 // tool and you must update this array (mirrors the provider/agent registry tests).
 const BUILT_IN_KEYS = [
   'browser',
+  'edit_file',
   'file_read',
   'file_write',
+  'glob',
+  'grep',
   'image_generation',
+  'list_directory',
   'shell',
   'web_search',
 ]

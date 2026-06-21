@@ -19,6 +19,7 @@
     "@ai-sdk/openai-compatible": "^2.0.51",
     "@base-ui/react": "^1.6.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "ai": "^6.0.208",
     "class-variance-authority": "^0.7.1",

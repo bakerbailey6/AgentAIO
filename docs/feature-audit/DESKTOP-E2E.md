@@ -26,6 +26,25 @@ dev server (`npm run dev` on :3000), which is how `tauri dev` works — full nat
 The model used for live inference is the installed, authenticated **`claude` CLI** (2.1.185),
 exercised through the app's own `claude-cli` provider. No API keys are harvested.
 
+## Repo / folder access — Claude Code parity (verified live)
+
+Agents can now work in a repo/local folder like Claude Code:
+
+- **Workspace** per agent (any type), chosen via a **native folder picker** ("Browse…", the OS
+  finder/explorer via the Tauri dialog plugin) or a typed path.
+- A full filesystem toolset — `file_read`, `file_write`, `edit_file` (search/replace),
+  `list_directory`, `glob`, `grep`, `shell` — **auto-granted** to any agent that has a workspace and
+  scoped to it (`permissionScope.allowedPaths = [workspace]`, shell enabled).
+- Native backends (`fs_list_directory` / `fs_glob` / `fs_grep`) re-check every path against the
+  allowed root (defense in depth) and ignore `.git`/`node_modules`/`target`/etc.
+
+**Verified live** (`e2e-desktop/repo-access.mjs`, against a real git repo at `/tmp/agentrepo`, in the
+real binary): `list_directory` lists the repo, `glob "**/*.rs"` finds `src/main.rs` (excludes `.ts`),
+`grep "TODO"` returns line-numbered matches, write+read round-trips, and a read of `/etc/passwd` from
+a repo-scoped agent is **denied**. Rust `cargo test` → **37/37** (incl. glob/grep/list guards); the
+workspace field + Browse button render and a workspace agent persists across reload. The only piece
+not demonstrable here is an LLM *driving* the tools (needs a tool-capable model — see limits).
+
 ## Scripts (`e2e-desktop/`)
 
 | Script | Covers |
