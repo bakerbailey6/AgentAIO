@@ -57,6 +57,15 @@ exercised through the app's own `claude-cli` provider. No API keys are harvested
   LLM-driven loop still can't be demonstrated live (the only available model, `claude-cli`, is
   text-only in this app's loop — a tool-capable API key is needed).
 
-### Genuine environmental limits (no compromise possible without resources)
-- **OpenAI / Google / Ollama / Codex** providers cannot be live-tested: no API keys and no
-  `ollama`/`codex` binaries are present in this environment. Their provider code is unit-tested only.
+### Genuine environmental limits (after exhausting the authorized installs)
+- **OpenAI / Google providers** — no API keys present (and harvesting the `claude` CLI token is
+  disallowed), so no live round-trip. Unit-tested only.
+- **Ollama** — installed and serving; `/api/tags` model-listing works (the provider's `listModels`
+  path verified live). **Local inference is unavailable**: the bundled `llama-server` runner
+  **SIGSEGVs on model warm-up** for every model (3b, 0.5b) and config (flash-attn off, avx2) — a
+  llama.cpp/virtualized-CPU incompatibility, not an app defect.
+- **Codex** — CLI installed (0.141.0) and spawns in the project dir, but is **"Not logged in"**
+  (needs OpenAI/ChatGPT auth not present), so no live response.
+- **LLM-driven tool-call loop** — needs a working tool-capable model; `claude-cli` is text-only in
+  this loop and the local Ollama path (which would have provided tools) can't run inference here.
+  `ChatPanel` now derives a real `permissionScope`, so the wiring is correct and ready.
