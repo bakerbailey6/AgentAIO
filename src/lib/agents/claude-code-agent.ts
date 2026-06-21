@@ -51,9 +51,21 @@ export class ClaudeCodeAgentProvider implements AgentProvider<ClaudeCodeConfig, 
     }
     // `--print --output-format stream-json` now REQUIRES `--verbose`; partial
     // messages give us incremental text deltas to stream into the UI.
+    // `--permission-mode acceptEdits` lets the agent autonomously read/write/edit
+    // files in its workspace (it runs with cwd = the project directory), which is
+    // what makes it a real Claude-Code-style coding agent rather than chat-only.
     const processId = await invoke<string>('spawn_process', {
       cmd: 'claude',
-      args: ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages', input],
+      args: [
+        '--print',
+        '--verbose',
+        '--output-format',
+        'stream-json',
+        '--include-partial-messages',
+        '--permission-mode',
+        'acceptEdits',
+        input,
+      ],
       cwd: session.projectDirectory,
     })
     this.processes.set(session.id, processId)

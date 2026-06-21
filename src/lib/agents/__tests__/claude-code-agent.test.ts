@@ -66,7 +66,16 @@ describe('ClaudeCodeAgentProvider', () => {
     await collect(provider.run(makeSession(), 'do a thing'))
     expect(invokeMock).toHaveBeenCalledWith('spawn_process', {
       cmd: 'claude',
-      args: ['--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages', 'do a thing'],
+      args: [
+        '--print',
+        '--verbose',
+        '--output-format',
+        'stream-json',
+        '--include-partial-messages',
+        '--permission-mode',
+        'acceptEdits',
+        'do a thing',
+      ],
       cwd: '/tmp/project',
     })
   })
