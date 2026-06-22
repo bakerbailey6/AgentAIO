@@ -18,6 +18,14 @@ export function RunModal({ open, onClose, onRun }: RunModalProps): React.JSX.Ele
 
   if (!open) return null
 
+  // The parent keeps this component mounted, so `useState` does not re-init
+  // between opens. Clear the input on every exit path (Run / Cancel / close) so
+  // a previous run's Start input never leaks into the next open.
+  const handleClose = () => {
+    setValue('')
+    onClose()
+  }
+
   const handleRun = () => {
     let parsed: unknown
     try {
@@ -26,6 +34,7 @@ export function RunModal({ open, onClose, onRun }: RunModalProps): React.JSX.Ele
       parsed = value
     }
     onRun(parsed)
+    setValue('')
   }
 
   return (
@@ -35,7 +44,7 @@ export function RunModal({ open, onClose, onRun }: RunModalProps): React.JSX.Ele
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
           <span className="text-[14px] font-semibold text-zinc-100">Run workflow</span>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-zinc-500 hover:text-zinc-300 transition-colors text-[16px] leading-none"
             aria-label="Close"
           >
@@ -63,7 +72,7 @@ export function RunModal({ open, onClose, onRun }: RunModalProps): React.JSX.Ele
         {/* Footer */}
         <div className="px-5 py-4 border-t border-white/[0.08] flex justify-end gap-2">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-zinc-300 hover:text-white text-[12px] font-medium rounded-lg px-4 py-2 border border-white/[0.08] hover:border-white/[0.15] transition-colors"
           >
             Cancel

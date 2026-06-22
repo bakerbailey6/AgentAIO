@@ -21,6 +21,7 @@ export const CREATE_AGENTS = `
     type TEXT NOT NULL CHECK(type IN ('llm','coding-agent','custom')),
     model_id TEXT,
     system_prompt TEXT NOT NULL DEFAULT '',
+    project_directory TEXT,
     tool_ids TEXT NOT NULL DEFAULT '[]',
     mcp_ids TEXT NOT NULL DEFAULT '[]',
     canvas_x REAL NOT NULL DEFAULT 0,

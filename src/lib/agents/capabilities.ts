@@ -23,7 +23,7 @@
 import type { AgentRow } from '@/lib/storage'
 import type { ToolDefinition } from '@/lib/interfaces'
 import { initDb, ToolRepository } from '@/lib/storage'
-import { TOOL_REGISTRY } from '@/lib/tools/registry'
+import { TOOL_REGISTRY, WORKSPACE_TOOL_NAMES } from '@/lib/tools/registry'
 import { readSkillFile, toSkill } from '@/lib/skills'
 
 /** Prefix marking a {@link AgentRow.toolIds} entry as a skill rather than a tool. */
@@ -79,6 +79,16 @@ export async function resolveCapabilities(agent: AgentRow): Promise<ResolvedCapa
         continue
       }
       tools.set(def.name, def)
+    }
+  }
+
+  // Auto-grant the filesystem/repo toolset to any agent that has a workspace
+  // directory. This is what gives agents Claude-Code-style access to read,
+  // navigate, search, and edit the repo without manually assigning each tool.
+  if (agent.projectDirectory) {
+    for (const name of WORKSPACE_TOOL_NAMES) {
+      const def = TOOL_REGISTRY.get(name)
+      if (def) tools.set(def.name, def)
     }
   }
 

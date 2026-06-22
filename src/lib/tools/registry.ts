@@ -13,6 +13,10 @@ import type { ToolDefinition } from '@/lib/interfaces'
 import { WebSearchTool } from './built-in/web-search'
 import { FileReadTool } from './built-in/file-read'
 import { FileWriteTool } from './built-in/file-write'
+import { ListDirectoryTool } from './built-in/list-directory'
+import { GlobTool } from './built-in/glob'
+import { GrepTool } from './built-in/grep'
+import { EditFileTool } from './built-in/edit-file'
 import { ShellTool } from './built-in/shell'
 import { BrowserTool } from './built-in/browser'
 import { ImageGenerationTool } from './built-in/image-generation'
@@ -22,10 +26,29 @@ export const TOOL_REGISTRY = new Map<string, ToolDefinition>([
   ['web_search', new WebSearchTool()],
   ['file_read', new FileReadTool()],
   ['file_write', new FileWriteTool()],
+  ['list_directory', new ListDirectoryTool()],
+  ['glob', new GlobTool()],
+  ['grep', new GrepTool()],
+  ['edit_file', new EditFileTool()],
   ['shell', new ShellTool()],
   ['browser', new BrowserTool()],
   ['image_generation', new ImageGenerationTool()],
 ])
+
+/**
+ * The built-in filesystem/repo toolset auto-granted to any agent that has a
+ * workspace directory — what gives agents Claude-Code-style access to read,
+ * navigate, search, and edit a repo. Consumed by `resolveCapabilities`.
+ */
+export const WORKSPACE_TOOL_NAMES = [
+  'file_read',
+  'file_write',
+  'edit_file',
+  'list_directory',
+  'glob',
+  'grep',
+  'shell',
+] as const
 
 /** Register (or replace) a tool under its `name`. */
 export function registerTool(tool: ToolDefinition): void {

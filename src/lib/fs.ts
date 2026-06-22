@@ -37,3 +37,33 @@ export async function writeTextFile(
 ): Promise<void> {
   await invoke<void>('fs_write_text', { path, content, allowedPaths })
 }
+
+/** One entry in a directory listing (from `fs_list_directory`). */
+export interface DirEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  size: number
+}
+
+/** One content-search hit (from `fs_grep`). */
+export interface GrepMatch {
+  path: string
+  line: number
+  text: string
+}
+
+/** List the immediate entries of a directory within the agent's allowed roots. */
+export async function listDirectory(path: string, allowedPaths: string[]): Promise<DirEntry[]> {
+  return invoke<DirEntry[]>('fs_list_directory', { path, allowedPaths })
+}
+
+/** Find files under `root` whose root-relative path matches a glob `pattern`. */
+export async function globFiles(root: string, pattern: string, allowedPaths: string[]): Promise<string[]> {
+  return invoke<string[]>('fs_glob', { root, pattern, allowedPaths })
+}
+
+/** Search file contents under `root` for a regex `pattern`. */
+export async function grepFiles(root: string, pattern: string, allowedPaths: string[]): Promise<GrepMatch[]> {
+  return invoke<GrepMatch[]>('fs_grep', { root, pattern, allowedPaths })
+}

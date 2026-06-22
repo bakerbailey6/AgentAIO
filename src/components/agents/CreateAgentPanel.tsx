@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { initDb, AgentRepository, ModelRepository } from '@/lib/storage'
 import type { AgentRow, ModelRow } from '@/lib/storage'
+import { WorkspacePicker } from './WorkspacePicker'
 
 interface CreateAgentPanelProps {
   open: boolean
@@ -26,6 +27,7 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
   const [models, setModels] = useState<ModelRow[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [projectDirectory, setProjectDirectory] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [nameError, setNameError] = useState(false)
 
@@ -35,6 +37,7 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
     setName('')
     setAgentType('llm')
     setSystemPrompt('')
+    setProjectDirectory('')
     setNameError(false)
 
     initDb()
@@ -63,6 +66,7 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
         type: agentType,
         modelId: agentType === 'llm' ? (selectedModelId ?? null) : null,
         systemPrompt: agentType === 'llm' ? systemPrompt.trim() : '',
+        projectDirectory: projectDirectory.trim() || null,
         toolIds: [],
         mcpIds: [],
         canvasX: 120,
@@ -136,6 +140,19 @@ export default function CreateAgentPanel({ open, onClose, onCreated, onNavigateT
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Workspace folder (all agent types) — gives the agent repo access */}
+        <div className="px-5 py-4 border-b border-white/[0.05]">
+          <WorkspacePicker
+            value={projectDirectory}
+            onChange={setProjectDirectory}
+            hint={
+              agentType === 'llm'
+                ? 'Optional — set a repo/folder to give this agent read/search/edit/shell access, like Claude Code.'
+                : 'Required — the working directory the coding agent runs in.'
+            }
+          />
         </div>
 
         {/* Model (LLM only) */}

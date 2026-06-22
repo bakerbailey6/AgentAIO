@@ -71,6 +71,7 @@ const agent = (over: Partial<AgentRow> = {}): AgentRow => ({
   type: 'llm',
   modelId: 'm1',
   systemPrompt: '',
+  projectDirectory: null,
   toolIds: ['t1', 't2'],
   mcpIds: [],
   canvasX: 120,

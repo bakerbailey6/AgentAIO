@@ -9,7 +9,6 @@ import { listBuiltInTools } from '@/lib/tools/registry'
 import { MCP_CATALOG } from '@/lib/store/catalog'
 import type { CatalogMcpEntry } from '@/lib/store/catalog'
 import type { ToolDefinition } from '@/lib/interfaces'
-import { initDb, McpRepository } from '@/lib/storage'
 
 type Tab = 'mcps' | 'tools' | 'skills'
 
@@ -80,16 +79,11 @@ export function StorePanel({ onClose }: StorePanelProps) {
         // Invalid name or no native backend — ignore.
       }
     } else {
-      // MCP install-from-command (skills handled above; tools install inline).
+      // MCP install-from-command/URL (skills handled above; tools install inline).
+      // Route through the hook so the new row renders immediately below.
       const name = value.split(' ').pop() ?? value
-      const db = await initDb()
-      await new McpRepository(db).create({
-        name,
-        transport: 'stdio',
-        commandOrUrl: value,
-        envVarsRef: [],
-        enabled: true,
-      })
+      const transport = /^https?:\/\//.test(value) ? 'sse' : 'stdio'
+      await mcpStore.addCustom(name, value, transport)
     }
     setFooterInput('')
   }
@@ -158,6 +152,26 @@ export function StorePanel({ onClose }: StorePanelProps) {
             )
           })
         )}
+
+        {/* Custom MCP servers (added via the footer) that aren't in the catalog. */}
+        {activeTab === 'mcps' &&
+          mcpStore.mcps
+            .filter((m) => !MCP_CATALOG.some((e) => e.name === m.name))
+            .filter((m) => matches(m.name, m.commandOrUrl))
+            .map((m) => (
+              <StoreItemRow
+                key={m.id}
+                name={m.name}
+                description={m.commandOrUrl}
+                installed
+                onInstall={() => {}}
+                onUninstall={() => mcpStore.uninstall(m.id)}
+                agents={agentList}
+                assignedAgents={assignments.assignedAgentNames(m.id, 'mcp')}
+                assignedAgentIds={assignments.assignedAgentIds(m.id, 'mcp')}
+                onToggleAgent={(agentId, next) => assignments.toggle(m.id, agentId, next, 'mcp')}
+              />
+            ))}
 
         {activeTab === 'tools' && (
           builtInTools.filter((t) => matches(t.name, t.description)).map((tool) => {

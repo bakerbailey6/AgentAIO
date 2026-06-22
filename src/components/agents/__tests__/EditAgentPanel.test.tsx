@@ -126,6 +126,7 @@ describe('EditAgentPanel', () => {
         name: 'Test Bot',
         modelId: 'model-1',
         systemPrompt: 'You are helpful.',
+        projectDirectory: null,
       })
       expect(spies.updateToolIds).toHaveBeenCalledWith('agent-1', ['tool-1', 'skill:foo.md'])
       expect(spies.updateMcpIds).toHaveBeenCalledWith('agent-1', ['mcp-1'])

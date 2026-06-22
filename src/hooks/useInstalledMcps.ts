@@ -43,6 +43,21 @@ export function useInstalledMcps() {
     setMcps(prev => [...prev, newRow])
   }
 
+  /**
+   * Install a custom MCP server from a raw command/URL (the footer "Add" flow),
+   * keeping the in-memory list in sync so the row renders immediately.
+   */
+  async function addCustom(
+    name: string,
+    commandOrUrl: string,
+    transport: McpRow['transport'] = 'stdio',
+  ): Promise<void> {
+    const db = await initDb()
+    const repo = new McpRepository(db)
+    const id = await repo.create({ name, transport, commandOrUrl, envVarsRef: [], enabled: true })
+    setMcps(prev => [...prev, { id, name, transport, commandOrUrl, envVarsRef: [], enabled: true, createdAt: Date.now() }])
+  }
+
   async function uninstall(id: string): Promise<void> {
     const db = await initDb()
     const repo = new McpRepository(db)
@@ -59,5 +74,5 @@ export function useInstalledMcps() {
     return mcps.find(m => m.name === name)?.id
   }
 
-  return { mcps, install, uninstall, isInstalled, installedId }
+  return { mcps, install, addCustom, uninstall, isInstalled, installedId }
 }

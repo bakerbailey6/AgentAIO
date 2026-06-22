@@ -37,11 +37,12 @@ vi.mock('@/lib/skills', () => ({
 
 // --- Tool registry: a small Map keyed by tool name. ---
 const webSearchDef = { name: 'web_search', source: 'built-in' } as unknown as ToolDefinition
-const { TOOL_REGISTRY } = vi.hoisted(() => ({
+const { TOOL_REGISTRY, WORKSPACE_TOOL_NAMES } = vi.hoisted(() => ({
   TOOL_REGISTRY: new Map<string, unknown>(),
+  WORKSPACE_TOOL_NAMES: ['file_read', 'file_write', 'edit_file', 'list_directory', 'glob', 'grep', 'shell'],
 }))
 
-vi.mock('@/lib/tools/registry', () => ({ TOOL_REGISTRY }))
+vi.mock('@/lib/tools/registry', () => ({ TOOL_REGISTRY, WORKSPACE_TOOL_NAMES }))
 
 import { resolveCapabilities } from '@/lib/agents/capabilities'
 
@@ -52,6 +53,7 @@ function makeAgent(overrides: Partial<AgentRow> = {}): AgentRow {
     type: 'llm',
     modelId: 'm1',
     systemPrompt: '',
+    projectDirectory: null,
     toolIds: [],
     mcpIds: [],
     canvasX: 0,
@@ -80,6 +82,31 @@ describe('resolveCapabilities', () => {
     expect(result.tools.size).toBe(1)
     expect(result.tools.get('web_search')).toBe(webSearchDef)
     expect(result.warnings).toEqual([])
+  })
+
+  it('auto-grants the workspace toolset when the agent has a project directory', async () => {
+    // Register stub implementations for the workspace tools.
+    for (const name of WORKSPACE_TOOL_NAMES) {
+      TOOL_REGISTRY.set(name, { name, source: 'built-in' } as unknown as ToolDefinition)
+    }
+    const agent = makeAgent({ projectDirectory: '/repo', toolIds: [] })
+
+    const result = await resolveCapabilities(agent)
+
+    for (const name of WORKSPACE_TOOL_NAMES) {
+      expect(result.tools.has(name)).toBe(true)
+    }
+    // No DB lookups needed — these come straight from the registry.
+    expect(result.warnings).toEqual([])
+  })
+
+  it('does NOT auto-grant the workspace toolset without a project directory', async () => {
+    for (const name of WORKSPACE_TOOL_NAMES) {
+      TOOL_REGISTRY.set(name, { name, source: 'built-in' } as unknown as ToolDefinition)
+    }
+    const agent = makeAgent({ projectDirectory: null, toolIds: [] })
+    const result = await resolveCapabilities(agent)
+    expect(result.tools.size).toBe(0)
   })
 
   it('warns and skips when a tool row is not found', async () => {

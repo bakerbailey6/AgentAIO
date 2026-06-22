@@ -11,6 +11,7 @@ import {
 import type { AgentRow, ModelRow } from '@/lib/storage'
 import { loadSkills } from '@/lib/skills'
 import type { Skill } from '@/lib/skills'
+import { WorkspacePicker } from './WorkspacePicker'
 
 interface EditAgentPanelProps {
   agentId: string
@@ -25,9 +26,11 @@ const SKILL_PREFIX = 'skill:'
 
 export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateToSettings }: EditAgentPanelProps) {
   const [name, setName] = useState('')
+  const [agentType, setAgentType] = useState<AgentRow['type']>('llm')
   const [models, setModels] = useState<ModelRow[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null)
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [projectDirectory, setProjectDirectory] = useState('')
   const [tools, setTools] = useState<{ id: string; name: string }[]>([])
   const [mcps, setMcps] = useState<{ id: string; name: string }[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
@@ -54,8 +57,10 @@ export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateTo
         setSkills(skillRows)
         if (agent) {
           setName(agent.name)
+          setAgentType(agent.type)
           setSelectedModelId(agent.modelId)
           setSystemPrompt(agent.systemPrompt)
+          setProjectDirectory(agent.projectDirectory ?? '')
           setSelectedToolIds(
             agent.toolIds.filter((id) => !id.startsWith(SKILL_PREFIX)),
           )
@@ -93,6 +98,7 @@ export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateTo
         name: name.trim(),
         modelId: selectedModelId ?? null,
         systemPrompt,
+        projectDirectory: projectDirectory.trim() || null,
       })
       await agentRepo.updateToolIds(agentId, [...selectedToolIds, ...skillIds])
       await agentRepo.updateMcpIds(agentId, selectedMcpIds)
@@ -135,6 +141,19 @@ export default function EditAgentPanel({ agentId, onClose, onSaved, onNavigateTo
             onChange={(e) => setName(e.target.value)}
             placeholder="Agent name"
             className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-zinc-200 focus:outline-none focus:border-indigo-500/50 placeholder:text-zinc-600"
+          />
+        </div>
+
+        {/* Workspace folder (all agent types) — gives the agent repo access */}
+        <div className="px-5 py-4 border-b border-white/[0.05]">
+          <WorkspacePicker
+            value={projectDirectory}
+            onChange={setProjectDirectory}
+            hint={
+              agentType === 'llm'
+                ? 'Optional — set a repo/folder to give this agent read/search/edit/shell access, like Claude Code.'
+                : 'The working directory the coding agent runs in.'
+            }
           />
         </div>
 

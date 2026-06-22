@@ -66,14 +66,24 @@ describe('ClaudeCodeAgentProvider', () => {
     await collect(provider.run(makeSession(), 'do a thing'))
     expect(invokeMock).toHaveBeenCalledWith('spawn_process', {
       cmd: 'claude',
-      args: ['--print', '--output-format', 'stream-json', 'do a thing'],
+      args: [
+        '--print',
+        '--verbose',
+        '--output-format',
+        'stream-json',
+        '--include-partial-messages',
+        '--permission-mode',
+        'acceptEdits',
+        'do a thing',
+      ],
       cwd: '/tmp/project',
     })
   })
 
   it('yields running, maps stdout lines to events, then idle', async () => {
     fireLines([
-      { type: 'assistant', text: 'hello' },
+      // Incremental text arrives as stream_event -> content_block_delta -> text_delta.
+      { type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hello' } } },
       { type: 'approval-request', requestId: 'req1', description: 'rm -rf' },
       { type: 'result' },
     ])
@@ -82,12 +92,12 @@ describe('ClaudeCodeAgentProvider', () => {
 
     expect(events.map((e) => e.type)).toEqual([
       'status-change', // running
-      'text-delta', // assistant
+      'text-delta', // streamed text delta
       'approval-request', // approval-request
-      'tool-call', // result (anything that is not assistant/approval-request)
       'status-change', // idle
     ])
     expect(events[0].payload).toEqual({ status: 'running' })
+    expect(events[1].payload).toEqual({ delta: 'hello' })
     expect(events.at(-1)!.payload).toEqual({ status: 'idle' })
     // Every event carries the agent id, not the session id.
     expect(events.every((e) => e.agentId === 'a1')).toBe(true)

@@ -4,8 +4,8 @@ import type { AgentRow } from '@/lib/storage'
 
 // --- Fixtures -------------------------------------------------------------
 const AGENTS: AgentRow[] = [
-  { id: 'a1', name: 'Alpha', type: 'llm', modelId: 'm1', systemPrompt: '', toolIds: [], mcpIds: [], canvasX: 0, canvasY: 0, groupId: null, createdAt: 0 },
-  { id: 'a2', name: 'Beta', type: 'coding-agent', modelId: 'm2', systemPrompt: '', toolIds: [], mcpIds: [], canvasX: 10, canvasY: 10, groupId: null, createdAt: 0 },
+  { id: 'a1', name: 'Alpha', type: 'llm', modelId: 'm1', systemPrompt: '', projectDirectory: null, toolIds: [], mcpIds: [], canvasX: 0, canvasY: 0, groupId: null, createdAt: 0 },
+  { id: 'a2', name: 'Beta', type: 'coding-agent', modelId: 'm2', systemPrompt: '', projectDirectory: '/tmp/beta', toolIds: [], mcpIds: [], canvasX: 10, canvasY: 10, groupId: null, createdAt: 0 },
 ]
 const MODELS = [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }]
 

@@ -5,7 +5,7 @@ import { useState } from 'react'
 interface StoreItemRowProps {
   name: string
   description: string
-  version: string
+  version?: string
   installed: boolean
   assignedAgents?: string[]
   installing?: boolean
@@ -47,7 +47,9 @@ export function StoreItemRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-medium text-zinc-200 truncate">{name}</span>
-            <span className="text-[10px] text-zinc-600 bg-white/[0.04] rounded px-1.5 py-0.5 shrink-0">v{version}</span>
+            {version && (
+              <span className="text-[10px] text-zinc-600 bg-white/[0.04] rounded px-1.5 py-0.5 shrink-0">v{version}</span>
+            )}
           </div>
           <p className="text-[11px] text-zinc-500 mt-0.5 leading-relaxed">{description}</p>
           {assignedAgents.length > 0 && (
